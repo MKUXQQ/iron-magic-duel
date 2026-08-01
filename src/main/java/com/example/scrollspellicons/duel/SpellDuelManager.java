@@ -64,6 +64,7 @@ public final class SpellDuelManager {
         PendingSelection state = selection(creator);
         SpellDuelGroup reusable = groups.values().stream()
                 .filter(group -> !group.active() && group.teamA().isEmpty() && group.teamB().isEmpty())
+                .sorted(java.util.Comparator.comparingInt(group -> groupOrder(group.id())))
                 .findFirst().orElse(null);
         String id = reusable == null ? nextGroupId() : reusable.id();
         if (reusable == null) groups.put(id, new SpellDuelGroup(id));
@@ -142,6 +143,14 @@ public final class SpellDuelManager {
         String id;
         do id = "duel_" + n++; while (groups.containsKey(id));
         return id;
+    }
+
+    private static int groupOrder(String id) {
+        if (id.startsWith("duel_")) {
+            try { return Integer.parseInt(id.substring("duel_".length())); }
+            catch (NumberFormatException ignored) { }
+        }
+        return Integer.MAX_VALUE;
     }
 
     private static Set<UUID> groupPlayers(SpellDuelGroup group) {

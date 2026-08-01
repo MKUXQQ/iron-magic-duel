@@ -52,7 +52,7 @@ public final class PlayerSelectionScreen extends Screen {
         graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xFF111111);
         graphics.fill(left + 2, top + 2, left + panelWidth - 2, top + 34, 0xFF303030);
         graphics.drawString(font, "选择在线玩家进行对战", left + 12, top + 12, 0xFFFFFF, false);
-        graphics.drawString(font, "左键：A队  右键：B队  蹲下左键：取消  Esc：取消本次编辑", left + 12, top + 24, 0xBBBBBB, false);
+        graphics.drawString(font, "左键：A队  右键：B队  已选玩家左键删除  Esc：取消本次编辑", left + 12, top + 24, 0xBBBBBB, false);
 
         int listTop = top + 42;
         int listBottom = top + panelHeight - 45;
@@ -125,8 +125,9 @@ public final class PlayerSelectionScreen extends Screen {
                     // While a custom screen is open the server-side crouching flag can be
                     // one tick behind. Read the actual Shift key so sneak-left is reliable.
                     boolean crouching = Minecraft.getInstance().options.keyShift.isDown();
+                    boolean alreadySelected = !players.get(index).selectedGroup().isEmpty();
                     Minecraft.getInstance().getConnection().send(new SpellDuelNetwork.SelectPlayerPayload(
-                            players.get(index).id(), (byte) (button == 0 && crouching ? 2 : button == 0 ? 0 : 1)));
+                            players.get(index).id(), (byte) (button == 0 && (crouching || alreadySelected) ? 2 : button == 0 ? 0 : 1)));
                     return true;
                 }
             }
