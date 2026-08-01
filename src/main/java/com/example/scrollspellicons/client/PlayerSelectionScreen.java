@@ -91,6 +91,7 @@ public final class PlayerSelectionScreen extends Screen {
                 : Minecraft.getInstance().getConnection().getPlayerInfo(id);
         ResourceLocation skin = info == null ? ResourceLocation.withDefaultNamespace("textures/entity/player/wide/alex.png") : info.getSkin().texture();
         graphics.blit(skin, x, y, 24, 24, 8, 8, 8, 8, 64, 64);
+        graphics.blit(skin, x, y, 24, 24, 40, 8, 8, 8, 64, 64);
     }
 
     @Override
@@ -135,6 +136,11 @@ public final class PlayerSelectionScreen extends Screen {
 
     @Override
     public boolean isPauseScreen() { return false; }
+
+    @Override
+    protected void renderBlurredBackground(float partialTick) {
+        // Keep the world sharp behind this player picker; the panel itself is opaque.
+    }
 
     @Override
     public void onClose() {

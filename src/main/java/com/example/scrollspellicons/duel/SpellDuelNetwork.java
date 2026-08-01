@@ -198,7 +198,6 @@ public final class SpellDuelNetwork {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer selector)) return;
             SpellDuelManager manager = SpellDuelEvents.manager(selector.getServer());
-            if (selector.getUUID().equals(payload.target)) return;
             if (manager.isSelectedByOther(selector.getUUID(), payload.target)) {
                 sendPlayerSelection(selector);
                 return;

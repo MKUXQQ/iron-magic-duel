@@ -19,6 +19,7 @@ public final class SpellDuelItems {
         addOnce(event, PLAYER_SELECTOR.get().getDefaultInstance());
         addOnce(event, POINT_SELECTOR.get().getDefaultInstance());
         addOnce(event, SHOP_EDITOR.get().getDefaultInstance());
+        addOnce(event, SpellDuelShop.shopStack());
     }
 
     private static void addOnce(BuildCreativeModeTabContentsEvent event, ItemStack stack) {
