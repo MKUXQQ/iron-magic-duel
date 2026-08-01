@@ -369,6 +369,9 @@ public final class SpellDuelManager {
                 .reduce((a, b) -> a + "、" + b).orElse(winner == SpellDuelGroup.Team.A ? "A组" : "B组");
         server.getPlayerList().broadcastSystemMessage(Component.literal(
                 "[法术决斗] " + group.id() + " 已结束，获胜玩家：" + winnerText), false);
+        // Keep the saved A/B points, but clear the finished duel roster so the
+        // same group can be configured and used again immediately.
+        group.clearPlayers();
         Map<UUID, SavedState> states = savedStates.remove(group.id());
         if (states != null) {
             if (delayRestore) {
