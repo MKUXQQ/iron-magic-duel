@@ -1,0 +1,516 @@
+package com.example.scrollspellicons.duel;
+
+import net.minecraft.core.GlobalPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.ChatFormatting;
+import net.minecraft.world.scores.PlayerTeam;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.world.level.storage.LevelResource;
+
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+/** Owns all duel state for one running Minecraft server. */
+public final class SpellDuelManager {
+    private final MinecraftServer server;
+    private final Map<String, SpellDuelGroup> groups = new LinkedHashMap<>();
+    private final Map<UUID, PendingSelection> pending = new HashMap<>();
+    private final Map<String, Map<UUID, SavedState>> savedStates = new HashMap<>();
+    private final Map<String, PendingRestore> pendingRestores = new HashMap<>();
+    private final Map<GlobalPos, String> catalystGroups = new LinkedHashMap<>();
+    private final Set<UUID> spectators = new LinkedHashSet<>();
+    private static final String SELECTION_GLOW_TEAM = "iron_magic_glow";
+    private final Map<UUID, String> previousTeams = new HashMap<>();
+    private boolean displayEnabled;
+    private final java.nio.file.Path pointFile;
+
+    public SpellDuelManager(MinecraftServer server) {
+        this.server = server;
+        this.pointFile = server.getWorldPath(LevelResource.ROOT).resolve("data/iron_magic_duel_points.nbt");
+        loadPoints();
+    }
+
+    public MinecraftServer server() { return server; }
+    public Map<String, SpellDuelGroup> groups() { return Map.copyOf(groups); }
+    public SpellDuelGroup group(String id) { return groups.get(id); }
+    public boolean displayEnabled() { return displayEnabled; }
+    public void setDisplayEnabled(boolean enabled) { displayEnabled = enabled; }
+
+    public PendingSelection selection(UUID player) {
+        return pending.computeIfAbsent(player, ignored -> new PendingSelection());
+    }
+
+    public void selectPlayer(UUID selector, UUID target, SpellDuelGroup.Team team) {
+        selection(selector).players.put(target, team);
+        ServerPlayer player = server.getPlayerList().getPlayer(target);
+        if (player != null) setSelectionGlow(player);
+    }
+
+    public String createGroup(UUID creator) {
+        PendingSelection state = selection(creator);
+        SpellDuelGroup existing = state.currentGroup == null ? null : groups.get(state.currentGroup);
+        if (existing == null || existing.active() || !existing.teamA().isEmpty() && !existing.teamB().isEmpty()) {
+            existing = groups.values().stream()
+                    .filter(group -> !group.active() && (group.teamA().isEmpty() || group.teamB().isEmpty())
+                            && group.pointA() != null && group.pointB() != null)
+                    .findFirst().orElse(null);
+        }
+        if (existing != null && !existing.active() && (existing.teamA().isEmpty() || existing.teamB().isEmpty())) {
+            state.players.forEach(existing::add);
+            clearSelectionGlow(state.players.keySet());
+            state.players.clear();
+            state.currentGroup = existing.id();
+            return existing.id();
+        }
+        String id;
+        int n = 1;
+        do id = "duel_" + n++; while (groups.containsKey(id));
+        SpellDuelGroup group = new SpellDuelGroup(id);
+        state.players.forEach((player, team) -> group.add(player, team));
+        clearSelectionGlow(state.players.keySet());
+        state.players.clear();
+        groups.put(id, group);
+        savePoints();
+        state.currentGroup = id;
+        return id;
+    }
+
+    public String createPointGroup(UUID creator) {
+        PendingSelection state = selection(creator);
+        if (state.pointA == null || state.pointB == null) return null;
+        SpellDuelGroup existing = state.currentGroup == null ? null : groups.get(state.currentGroup);
+        if (existing == null || existing.active() || existing.pointA() != null && existing.pointB() != null) {
+            existing = groups.values().stream()
+                    .filter(group -> !group.active() && (group.pointA() == null || group.pointB() == null)
+                            && !group.teamA().isEmpty() && !group.teamB().isEmpty())
+                    .findFirst().orElse(null);
+        }
+        if (existing != null && !existing.active() && (existing.pointA() == null || existing.pointB() == null)) {
+            existing.setPoint(SpellDuelGroup.Team.A, state.pointA);
+            existing.setPoint(SpellDuelGroup.Team.B, state.pointB);
+            state.pointA = null;
+            state.pointB = null;
+            clearSelectionGlow(state.players.keySet());
+            state.players.clear();
+            state.currentGroup = existing.id();
+            return existing.id();
+        }
+        String id;
+        int n = 1;
+        do id = "duel_" + n++; while (groups.containsKey(id));
+        SpellDuelGroup group = new SpellDuelGroup(id);
+        group.setPoint(SpellDuelGroup.Team.A, state.pointA);
+        group.setPoint(SpellDuelGroup.Team.B, state.pointB);
+        clearSelectionGlow(state.players.keySet());
+        state.players.clear();
+        groups.put(id, group);
+        savePoints();
+        state.currentGroup = id;
+        state.pointA = null;
+        state.pointB = null;
+        return id;
+    }
+
+    private void setSelectionGlow(ServerPlayer player) {
+        var scoreboard = server.getScoreboard();
+        PlayerTeam glowTeam = scoreboard.getPlayerTeam(SELECTION_GLOW_TEAM);
+        if (glowTeam == null) {
+            glowTeam = scoreboard.addPlayerTeam(SELECTION_GLOW_TEAM);
+            glowTeam.setColor(ChatFormatting.GREEN);
+        }
+        PlayerTeam oldTeam = scoreboard.getPlayersTeam(player.getScoreboardName());
+        if (oldTeam != null && oldTeam != glowTeam) previousTeams.putIfAbsent(player.getUUID(), oldTeam.getName());
+        scoreboard.addPlayerToTeam(player.getScoreboardName(), glowTeam);
+        player.setGlowingTag(true);
+    }
+
+    private void clearSelectionGlow(Set<UUID> players) {
+        var scoreboard = server.getScoreboard();
+        PlayerTeam glowTeam = scoreboard.getPlayerTeam(SELECTION_GLOW_TEAM);
+        for (UUID uuid : players) {
+            ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+            if (player == null) continue;
+            scoreboard.removePlayerFromTeam(player.getScoreboardName());
+            String oldTeamName = previousTeams.remove(uuid);
+            if (oldTeamName != null) {
+                PlayerTeam oldTeam = scoreboard.getPlayerTeam(oldTeamName);
+                if (oldTeam != null) scoreboard.addPlayerToTeam(player.getScoreboardName(), oldTeam);
+            }
+            player.setGlowingTag(false);
+        }
+        if (glowTeam != null && glowTeam.getPlayers().isEmpty()) scoreboard.removePlayerTeam(glowTeam);
+    }
+
+    public void selectPoint(UUID selector, SpellDuelGroup.Team team, ServerLevel level, net.minecraft.core.BlockPos pos) {
+        PendingSelection state = selection(selector);
+        SpellDuelGroup.PointLocation point = new SpellDuelGroup.PointLocation(
+                level.dimension().location().toString(), pos.getX() + .5, pos.getY() + 1, pos.getZ() + .5, 0, 0);
+        if (team == SpellDuelGroup.Team.A) state.pointA = point;
+        else state.pointB = point;
+    }
+
+    public boolean setPointFromCommand(String id, SpellDuelGroup.Team team, ServerPlayer player) {
+        SpellDuelGroup group = groups.get(id);
+        if (group == null || group.active()) return false;
+        group.setPoint(team, new SpellDuelGroup.PointLocation(player.level().dimension().location().toString(),
+                player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot()));
+        savePoints();
+        return true;
+    }
+
+    public boolean bindPoints(UUID selector) {
+        PendingSelection state = selection(selector);
+        SpellDuelGroup group = groups.get(state.currentGroup);
+        if (group == null || state.pointA == null || state.pointB == null) return false;
+        group.setPoint(SpellDuelGroup.Team.A, state.pointA);
+        group.setPoint(SpellDuelGroup.Team.B, state.pointB);
+        state.pointA = null;
+        state.pointB = null;
+        savePoints();
+        return true;
+    }
+
+    public String currentGroup(UUID selector) { return selection(selector).currentGroup; }
+
+    public void setCatalystGroup(GlobalPos pos, String group) { catalystGroups.put(pos, group); }
+
+    public String cycleCatalyst(GlobalPos pos) {
+        ArrayList<String> ids = new ArrayList<>(groups.keySet());
+        if (ids.isEmpty()) return null;
+        String current = catalystGroups.get(pos);
+        int next = current == null ? 0 : (ids.indexOf(current) + 1) % ids.size();
+        String selected = ids.get(next);
+        catalystGroups.put(pos, selected);
+        return selected;
+    }
+
+    public String catalystGroup(GlobalPos pos) { return catalystGroups.get(pos); }
+
+    public ArrayList<ServerPlayer> spectators(String groupId) {
+        ArrayList<ServerPlayer> result = new ArrayList<>();
+        for (UUID uuid : spectators) {
+            if (groupId.equals(spectatorGroups.get(uuid))) {
+                ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+                if (player != null) result.add(player);
+            }
+        }
+        return result;
+    }
+
+    public String start(String id) {
+        SpellDuelGroup group = groups.get(id);
+        if (group == null) return "不存在决斗组 " + id;
+        if (group.active()) return "决斗组 " + id + " 已经在进行中";
+        if (pendingRestores.containsKey(id)) return "决斗组 " + id + " 正在等待返回，剩余 "
+                + Math.max(1, (pendingRestores.get(id).ticks() + 19) / 20) + " 秒";
+        if (group.teamA().isEmpty()) return id + " 缺少 A 队玩家";
+        if (group.teamB().isEmpty()) return id + " 缺少 B 队玩家";
+        if (group.pointA() == null) return id + " 缺少 A 点位";
+        if (group.pointB() == null) return id + " 缺少 B 点位";
+        group.setActive(true);
+        teleportTeam(group.teamA(), group.pointA(), group);
+        teleportTeam(group.teamB(), group.pointB(), group);
+        return "已启动 " + id;
+    }
+
+    public Map<String, String> startAll() {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (String id : new ArrayList<>(groups.keySet())) result.put(id, start(id));
+        return result;
+    }
+
+    private void teleportTeam(Set<UUID> players, SpellDuelGroup.PointLocation point, SpellDuelGroup group) {
+        ServerLevel level = level(point.dimension());
+        if (level == null) return;
+        for (UUID uuid : players) {
+            ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+            if (player == null) continue;
+            savedStates.computeIfAbsent(group.id(), ignored -> new HashMap<>())
+                    .putIfAbsent(uuid, SavedState.capture(player));
+            player.setGameMode(GameType.SURVIVAL);
+            player.teleportTo(level, point.x(), point.y(), point.z(), point.yaw(), point.pitch());
+        }
+    }
+
+    public void joinSpectator(String groupId, ServerPlayer player) {
+        joinSpectator(groupId, player, null);
+    }
+
+    public void joinSpectator(String groupId, ServerPlayer player, GlobalPos observationBlock) {
+        SpellDuelGroup group = groups.get(groupId);
+        if (group == null || !group.active()) return;
+        savedStates.computeIfAbsent(groupId, ignored -> new HashMap<>())
+                .putIfAbsent(player.getUUID(), SavedState.capture(player));
+        spectators.add(player.getUUID());
+        spectatorGroups.put(player.getUUID(), groupId);
+        player.setGameMode(GameType.SPECTATOR);
+        if (observationBlock != null) {
+            ServerLevel level = server.getLevel(observationBlock.dimension());
+            if (level != null) player.teleportTo(level, observationBlock.pos().getX() + 0.5,
+                    observationBlock.pos().getY() + 1.1, observationBlock.pos().getZ() + 0.5,
+                    player.getYRot(), player.getXRot());
+        } else {
+            teleportSpectatorToCenter(group, player);
+        }
+    }
+
+    public boolean leaveSpectator(ServerPlayer player) {
+        UUID uuid = player.getUUID();
+        String groupId = spectatorGroups.remove(uuid);
+        boolean wasSpectator = spectators.remove(uuid);
+        if (groupId == null) return wasSpectator;
+        Map<UUID, SavedState> states = savedStates.get(groupId);
+        if (states != null) {
+            SavedState saved = states.remove(uuid);
+            if (saved != null) saved.restore(server, uuid);
+            if (states.isEmpty()) savedStates.remove(groupId);
+        }
+        return true;
+    }
+
+    private void teleportSpectatorToCenter(SpellDuelGroup group, ServerPlayer player) {
+        if (group.pointA() == null || group.pointB() == null) return;
+        SpellDuelGroup.PointLocation a = group.pointA();
+        SpellDuelGroup.PointLocation b = group.pointB();
+        if (!a.dimension().equals(b.dimension())) {
+            ServerLevel level = level(a.dimension());
+            if (level != null) player.teleportTo(level, a.x(), a.y(), a.z(), a.yaw(), a.pitch());
+            return;
+        }
+        ServerLevel level = level(a.dimension());
+        if (level != null) {
+            player.teleportTo(level, (a.x() + b.x()) / 2.0, (a.y() + b.y()) / 2.0 + 2.0,
+                    (a.z() + b.z()) / 2.0, a.yaw(), a.pitch());
+        }
+    }
+
+    public void tick() {
+        for (var iterator = pendingRestores.entrySet().iterator(); iterator.hasNext();) {
+            var entry = iterator.next();
+            PendingRestore restore = entry.getValue().tick();
+            if (restore.ticks() <= 0) {
+                restore.states().forEach((uuid, state) -> state.restore(server, uuid));
+                iterator.remove();
+            } else {
+                entry.setValue(restore);
+            }
+        }
+        for (SpellDuelGroup group : new ArrayList<>(groups.values())) {
+            if (!group.active()) continue;
+            Set<UUID> living = new LinkedHashSet<>();
+            group.teamA().forEach(uuid -> addIfLiving(living, uuid));
+            group.teamB().forEach(uuid -> addIfLiving(living, uuid));
+            SpellDuelGroup.Team winner = group.winner(living);
+            if (winner != null || group.isTeamEliminated(SpellDuelGroup.Team.A, living) || group.isTeamEliminated(SpellDuelGroup.Team.B, living)) finish(group, winner, true);
+        }
+    }
+
+    private void addIfLiving(Set<UUID> living, UUID uuid) {
+        ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+        if (player != null && player.isAlive() && !player.isDeadOrDying() && player.getHealth() > 0) living.add(uuid);
+    }
+
+    private void finish(SpellDuelGroup group, SpellDuelGroup.Team winner) {
+        finish(group, winner, false);
+    }
+
+    private void finish(SpellDuelGroup group, SpellDuelGroup.Team winner, boolean delayRestore) {
+        group.setActive(false);
+        String winnerText = winner == null ? "平局" : group.livingTeam(winner, livingPlayers(group)).stream()
+                .map(uuid -> { ServerPlayer p = server.getPlayerList().getPlayer(uuid); return p == null ? uuid.toString() : p.getGameProfile().getName(); })
+                .reduce((a, b) -> a + "、" + b).orElse(winner == SpellDuelGroup.Team.A ? "A组" : "B组");
+        server.getPlayerList().broadcastSystemMessage(Component.literal(
+                "[法术决斗] " + group.id() + " 已结束，获胜玩家：" + winnerText), false);
+        Map<UUID, SavedState> states = savedStates.remove(group.id());
+        if (states != null) {
+            if (delayRestore) {
+                pendingRestores.put(group.id(), new PendingRestore(states, 100));
+            } else {
+                for (UUID uuid : new ArrayList<>(states.keySet())) {
+                    SavedState saved = states.get(uuid);
+                    if (saved != null) saved.restore(server, uuid);
+                }
+            }
+        }
+        for (UUID uuid : new ArrayList<>(spectators)) {
+            if (group.id().equals(spectatorGroups.get(uuid))) {
+                spectators.remove(uuid);
+                spectatorGroups.remove(uuid);
+            }
+        }
+    }
+
+    private Set<UUID> livingPlayers(SpellDuelGroup group) {
+        Set<UUID> result = new LinkedHashSet<>();
+        group.teamA().forEach(uuid -> addIfLiving(result, uuid));
+        group.teamB().forEach(uuid -> addIfLiving(result, uuid));
+        return result;
+    }
+
+    private void loadPoints() {
+        if (!java.nio.file.Files.exists(pointFile)) return;
+        try {
+            CompoundTag root;
+            try (var input = java.nio.file.Files.newInputStream(pointFile)) {
+                root = NbtIo.readCompressed(input, net.minecraft.nbt.NbtAccounter.unlimitedHeap());
+            }
+            CompoundTag groupsTag = root.getCompound("groups");
+            for (String id : groupsTag.getAllKeys()) {
+                SpellDuelGroup group = new SpellDuelGroup(id);
+                CompoundTag data = groupsTag.getCompound(id);
+                if (data.contains("a")) group.setPoint(SpellDuelGroup.Team.A, readPoint(data.getCompound("a")));
+                if (data.contains("b")) group.setPoint(SpellDuelGroup.Team.B, readPoint(data.getCompound("b")));
+                groups.put(id, group);
+            }
+        } catch (Exception ignored) { }
+    }
+
+    private void savePoints() {
+        try {
+            java.nio.file.Files.createDirectories(pointFile.getParent());
+            CompoundTag root = new CompoundTag(); CompoundTag groupsTag = new CompoundTag();
+            groups.forEach((id, group) -> { CompoundTag data = new CompoundTag();
+                if (group.pointA() != null) data.put("a", writePoint(group.pointA()));
+                if (group.pointB() != null) data.put("b", writePoint(group.pointB())); groupsTag.put(id, data); });
+            root.put("groups", groupsTag); NbtIo.writeCompressed(root, pointFile);
+        } catch (Exception ignored) { }
+    }
+
+    private static CompoundTag writePoint(SpellDuelGroup.PointLocation p) {
+        CompoundTag tag = new CompoundTag(); tag.putString("dimension", p.dimension()); tag.putDouble("x", p.x());
+        tag.putDouble("y", p.y()); tag.putDouble("z", p.z()); tag.putFloat("yaw", p.yaw()); tag.putFloat("pitch", p.pitch()); return tag;
+    }
+
+    private static SpellDuelGroup.PointLocation readPoint(CompoundTag tag) {
+        return new SpellDuelGroup.PointLocation(tag.getString("dimension"), tag.getDouble("x"), tag.getDouble("y"), tag.getDouble("z"), tag.getFloat("yaw"), tag.getFloat("pitch"));
+    }
+
+    public void clearPlayers() {
+        groups.values().forEach(group -> {
+            if (!group.active()) {
+                group.clearPlayers();
+            }
+        });
+        pending.clear();
+    }
+
+    public int clearPoints() {
+        int cleared = 0;
+        for (SpellDuelGroup group : groups.values()) {
+            if (group.active()) continue;
+            if (group.pointA() != null || group.pointB() != null) cleared++;
+            group.setPoint(SpellDuelGroup.Team.A, null);
+            group.setPoint(SpellDuelGroup.Team.B, null);
+        }
+        catalystGroups.clear();
+        pending.values().forEach(selection -> {
+            selection.pointA = null;
+            selection.pointB = null;
+        });
+        savePoints();
+        return cleared;
+    }
+
+    public boolean clearPoints(String id) {
+        SpellDuelGroup group = groups.get(id);
+        if (group == null) return false;
+        if (group.active()) finish(group, null);
+        group.setPoint(SpellDuelGroup.Team.A, null);
+        group.setPoint(SpellDuelGroup.Team.B, null);
+        catalystGroups.entrySet().removeIf(entry -> id.equals(entry.getValue()));
+        savePoints();
+        return true;
+    }
+
+    public boolean clearPlayers(String id) {
+        SpellDuelGroup group = groups.get(id);
+        if (group == null) return false;
+        if (group.active()) finish(group, null);
+        group.clearPlayers();
+        return true;
+    }
+
+    public boolean clearConfiguration(String id) {
+        SpellDuelGroup group = groups.get(id);
+        if (group == null) return false;
+        if (group.active()) finish(group, null);
+        group.clearPlayers();
+        group.setPoint(SpellDuelGroup.Team.A, null);
+        group.setPoint(SpellDuelGroup.Team.B, null);
+        catalystGroups.entrySet().removeIf(entry -> id.equals(entry.getValue()));
+        return true;
+    }
+
+    public boolean clearGroup(String id) {
+        SpellDuelGroup group = groups.get(id);
+        if (group == null) return false;
+        if (group.active()) finish(group, null);
+        groups.remove(id);
+        catalystGroups.entrySet().removeIf(entry -> id.equals(entry.getValue()));
+        pending.values().forEach(selection -> {
+            if (id.equals(selection.currentGroup)) selection.currentGroup = null;
+        });
+        return true;
+    }
+
+    public int clearGroups() {
+        int cleared = 0;
+        for (String id : new ArrayList<>(groups.keySet())) {
+            SpellDuelGroup group = groups.get(id);
+            if (group != null && group.active()) finish(group, null);
+            if (groups.remove(id) != null) cleared++;
+            catalystGroups.entrySet().removeIf(entry -> id.equals(entry.getValue()));
+        }
+        pending.clear();
+        return cleared;
+    }
+
+    private ServerLevel level(String id) {
+        ResourceKey<Level> key = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(id));
+        return server.getLevel(key);
+    }
+
+    private final Map<UUID, String> spectatorGroups = new HashMap<>();
+
+    public static final class PendingSelection {
+        private final Map<UUID, SpellDuelGroup.Team> players = new LinkedHashMap<>();
+        private SpellDuelGroup.PointLocation pointA;
+        private SpellDuelGroup.PointLocation pointB;
+        private String currentGroup;
+    }
+
+    private record PendingRestore(Map<UUID, SavedState> states, int ticks) {
+        PendingRestore tick() { return new PendingRestore(states, ticks - 1); }
+    }
+
+    private record SavedState(ResourceKey<Level> dimension, Vec3 position, float yRot, float xRot, GameType gameType) {
+        static SavedState capture(ServerPlayer player) {
+            return new SavedState(player.level().dimension(), player.position(), player.getYRot(), player.getXRot(), player.gameMode.getGameModeForPlayer());
+        }
+
+        void restore(MinecraftServer server, UUID uuid) {
+            ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+            ServerLevel level = server.getLevel(dimension);
+            if (player != null && level != null) {
+                player.setGameMode(gameType);
+                player.teleportTo(level, position.x(), position.y(), position.z(), yRot, xRot);
+            }
+        }
+    }
+}
