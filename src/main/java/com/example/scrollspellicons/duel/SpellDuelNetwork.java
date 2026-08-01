@@ -91,6 +91,39 @@ public final class SpellDuelNetwork {
                 }
                 return new CooldownPayload(entries);
             });
+    private static final CustomPacketPayload.Type<PlayerSelectionPayload> PLAYER_SELECTION_TYPE = new CustomPacketPayload.Type<>(
+            ResourceLocation.fromNamespaceAndPath(IronSpellPerformance.MOD_ID, "player_selection"));
+    private static final StreamCodec<RegistryFriendlyByteBuf, PlayerSelectionPayload> PLAYER_SELECTION_CODEC = StreamCodec.of(
+            (buf, payload) -> {
+                buf.writeVarInt(payload.players.size());
+                for (PlayerChoice player : payload.players) {
+                    buf.writeUUID(player.id);
+                    buf.writeUtf(player.name, 64);
+                    buf.writeBoolean(player.selectedByOther);
+                    buf.writeByte(player.ownTeam);
+                }
+            },
+            buf -> {
+                List<PlayerChoice> players = new ArrayList<>();
+                for (int i = 0, count = buf.readVarInt(); i < count; i++) {
+                    players.add(new PlayerChoice(buf.readUUID(), buf.readUtf(64), buf.readBoolean(), buf.readByte()));
+                }
+                return new PlayerSelectionPayload(players);
+            });
+    private static final CustomPacketPayload.Type<SelectPlayerPayload> SELECT_PLAYER_TYPE = new CustomPacketPayload.Type<>(
+            ResourceLocation.fromNamespaceAndPath(IronSpellPerformance.MOD_ID, "select_player"));
+    private static final StreamCodec<RegistryFriendlyByteBuf, SelectPlayerPayload> SELECT_PLAYER_CODEC = StreamCodec.of(
+            (buf, payload) -> { buf.writeUUID(payload.target); buf.writeByte(payload.team); },
+            buf -> new SelectPlayerPayload(buf.readUUID(), buf.readByte()));
+    private static final CustomPacketPayload.Type<CreateSelectionPayload> CREATE_SELECTION_TYPE = new CustomPacketPayload.Type<>(
+            ResourceLocation.fromNamespaceAndPath(IronSpellPerformance.MOD_ID, "create_selection"));
+    private static final StreamCodec<RegistryFriendlyByteBuf, CreateSelectionPayload> CREATE_SELECTION_CODEC = StreamCodec.unit(new CreateSelectionPayload());
+    private static final CustomPacketPayload.Type<CancelSelectionPayload> CANCEL_SELECTION_TYPE = new CustomPacketPayload.Type<>(
+            ResourceLocation.fromNamespaceAndPath(IronSpellPerformance.MOD_ID, "cancel_selection"));
+    private static final StreamCodec<RegistryFriendlyByteBuf, CancelSelectionPayload> CANCEL_SELECTION_CODEC = StreamCodec.unit(new CancelSelectionPayload());
+    private static final CustomPacketPayload.Type<SelectionClosePayload> SELECTION_CLOSE_TYPE = new CustomPacketPayload.Type<>(
+            ResourceLocation.fromNamespaceAndPath(IronSpellPerformance.MOD_ID, "selection_close"));
+    private static final StreamCodec<RegistryFriendlyByteBuf, SelectionClosePayload> SELECTION_CLOSE_CODEC = StreamCodec.unit(new SelectionClosePayload());
 
     private SpellDuelNetwork() {}
 
@@ -101,6 +134,11 @@ public final class SpellDuelNetwork {
         registrar.playToClient(HUD_POSITION_TYPE, HUD_POSITION_CODEC, SpellDuelNetwork::handleHudPosition);
         registrar.playToClient(SNAPSHOT_TYPE, SNAPSHOT_CODEC, SpellDuelNetwork::handleSnapshot);
         registrar.playToClient(COOLDOWN_TYPE, COOLDOWN_CODEC, SpellDuelNetwork::handleCooldowns);
+        registrar.playToClient(PLAYER_SELECTION_TYPE, PLAYER_SELECTION_CODEC, SpellDuelNetwork::handlePlayerSelection);
+        registrar.playToClient(SELECTION_CLOSE_TYPE, SELECTION_CLOSE_CODEC, SpellDuelNetwork::handleSelectionClose);
+        registrar.playToServer(SELECT_PLAYER_TYPE, SELECT_PLAYER_CODEC, SpellDuelNetwork::handleSelectPlayer);
+        registrar.playToServer(CREATE_SELECTION_TYPE, CREATE_SELECTION_CODEC, SpellDuelNetwork::handleCreateSelection);
+        registrar.playToServer(CANCEL_SELECTION_TYPE, CANCEL_SELECTION_CODEC, SpellDuelNetwork::handleCancelSelection);
     }
 
     public static void broadcastDisplay(net.minecraft.server.MinecraftServer server, boolean enabled) {
@@ -131,6 +169,62 @@ public final class SpellDuelNetwork {
 
     private static void handleCooldowns(CooldownPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> com.example.scrollspellicons.client.SpellDuelClientState.setCooldowns(payload.entries));
+    }
+
+    public static void sendPlayerSelection(ServerPlayer player) {
+        SpellDuelManager manager = SpellDuelEvents.manager(player.getServer());
+        List<PlayerChoice> choices = new ArrayList<>();
+        for (ServerPlayer online : player.getServer().getPlayerList().getPlayers()) {
+            SpellDuelGroup.Team team = manager.selectedTeam(player.getUUID(), online.getUUID());
+            choices.add(new PlayerChoice(online.getUUID(), online.getGameProfile().getName(),
+                    manager.isSelectedByOther(player.getUUID(), online.getUUID()), team == null ? -1 : team == SpellDuelGroup.Team.A ? 0 : 1));
+        }
+        PacketDistributor.sendToPlayer(player, new PlayerSelectionPayload(choices));
+    }
+
+    public static void sendSelectionClose(ServerPlayer player) {
+        PacketDistributor.sendToPlayer(player, new SelectionClosePayload());
+    }
+
+    private static void handlePlayerSelection(PlayerSelectionPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> com.example.scrollspellicons.client.PlayerSelectionScreen.open(payload.players));
+    }
+
+    private static void handleSelectionClose(SelectionClosePayload payload, IPayloadContext context) {
+        context.enqueueWork(com.example.scrollspellicons.client.PlayerSelectionScreen::closeIfOpen);
+    }
+
+    private static void handleSelectPlayer(SelectPlayerPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer selector)) return;
+            SpellDuelManager manager = SpellDuelEvents.manager(selector.getServer());
+            if (selector.getUUID().equals(payload.target)) return;
+            if (manager.isSelectedByOther(selector.getUUID(), payload.target)) {
+                sendPlayerSelection(selector);
+                return;
+            }
+            manager.toggleSelectedPlayer(selector.getUUID(), payload.target,
+                    payload.team == 0 ? SpellDuelGroup.Team.A : SpellDuelGroup.Team.B);
+            sendPlayerSelection(selector);
+        });
+    }
+
+    private static void handleCreateSelection(CreateSelectionPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer selector)) return;
+            String id = SpellDuelEvents.manager(selector.getServer()).createGroup(selector.getUUID());
+            selector.playNotifySound(net.minecraft.sounds.SoundEvents.PLAYER_LEVELUP, net.minecraft.sounds.SoundSource.PLAYERS, 1.0F, 1.0F);
+            selector.sendSystemMessage(net.minecraft.network.chat.Component.literal("[法术决斗] 已创建决斗组 " + id));
+            sendSelectionClose(selector);
+        });
+    }
+
+    private static void handleCancelSelection(CancelSelectionPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer selector)) return;
+            SpellDuelEvents.manager(selector.getServer()).cancelSelection(selector.getUUID());
+            sendSelectionClose(selector);
+        });
     }
 
     public static void broadcastCooldowns(SpellDuelManager manager) {
@@ -209,6 +303,28 @@ public final class SpellDuelNetwork {
 
     public record CooldownPayload(List<CooldownEntry> entries) implements CustomPacketPayload {
         @Override public Type<? extends CustomPacketPayload> type() { return COOLDOWN_TYPE; }
+    }
+
+    public record PlayerSelectionPayload(List<PlayerChoice> players) implements CustomPacketPayload {
+        @Override public Type<? extends CustomPacketPayload> type() { return PLAYER_SELECTION_TYPE; }
+    }
+
+    public record PlayerChoice(UUID id, String name, boolean selectedByOther, int ownTeam) {}
+
+    public record SelectPlayerPayload(UUID target, byte team) implements CustomPacketPayload {
+        @Override public Type<? extends CustomPacketPayload> type() { return SELECT_PLAYER_TYPE; }
+    }
+
+    public record CreateSelectionPayload() implements CustomPacketPayload {
+        @Override public Type<? extends CustomPacketPayload> type() { return CREATE_SELECTION_TYPE; }
+    }
+
+    public record CancelSelectionPayload() implements CustomPacketPayload {
+        @Override public Type<? extends CustomPacketPayload> type() { return CANCEL_SELECTION_TYPE; }
+    }
+
+    public record SelectionClosePayload() implements CustomPacketPayload {
+        @Override public Type<? extends CustomPacketPayload> type() { return SELECTION_CLOSE_TYPE; }
     }
 
     public record CooldownEntry(UUID playerId, Map<String, Integer> cooldowns) {}

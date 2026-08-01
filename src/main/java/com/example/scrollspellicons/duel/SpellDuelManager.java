@@ -62,6 +62,38 @@ public final class SpellDuelManager {
         if (player != null) setSelectionGlow(player);
     }
 
+    public boolean toggleSelectedPlayer(UUID selector, UUID target, SpellDuelGroup.Team team) {
+        PendingSelection state = selection(selector);
+        if (state.players.get(target) == team) {
+            state.players.remove(target);
+            clearSelectionGlow(java.util.Set.of(target));
+            return false;
+        }
+        state.players.put(target, team);
+        ServerPlayer player = server.getPlayerList().getPlayer(target);
+        if (player != null) setSelectionGlow(player);
+        return true;
+    }
+
+    public void cancelSelection(UUID selector) {
+        PendingSelection state = pending.remove(selector);
+        if (state != null) clearSelectionGlow(state.players.keySet());
+    }
+
+    public boolean isSelectedByOther(UUID selector, UUID target) {
+        for (var entry : pending.entrySet()) {
+            if (!entry.getKey().equals(selector) && entry.getValue().players.containsKey(target)) return true;
+        }
+        for (SpellDuelGroup group : groups.values()) {
+            if (group.contains(target)) return true;
+        }
+        return false;
+    }
+
+    public SpellDuelGroup.Team selectedTeam(UUID selector, UUID target) {
+        return selection(selector).players.get(target);
+    }
+
     public String createGroup(UUID creator) {
         PendingSelection state = selection(creator);
         SpellDuelGroup existing = state.currentGroup == null ? null : groups.get(state.currentGroup);

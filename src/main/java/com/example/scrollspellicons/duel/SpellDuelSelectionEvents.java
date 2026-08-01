@@ -56,14 +56,15 @@ public final class SpellDuelSelectionEvents {
     }
 
     @SubscribeEvent
-    public static void onRightClickItem(PlayerInteractEvent.RightClickItem event) {
+    public static void onCrouchRightClickItem(PlayerInteractEvent.RightClickItem event) {
         if (!(event.getEntity() instanceof ServerPlayer player) || event.getLevel().isClientSide() || !player.isCrouching()) return;
         SpellDuelManager manager = SpellDuelEvents.manager(player.getServer());
         ItemStack stack = event.getItemStack();
         if (is(stack, SpellDuelItems.PLAYER_SELECTOR)) {
-            String id = manager.createGroup(player.getUUID());
-            player.playNotifySound(SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1.0F, 1.0F);
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("[法术决斗] 已创建/绑定玩家组 " + id));
+            manager.cancelSelection(player.getUUID());
+            player.closeContainer();
+            SpellDuelNetwork.sendSelectionClose(player);
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("[法术决斗] 已取消玩家选择"));
             event.setCanceled(true);
         } else if (is(stack, SpellDuelItems.POINT_SELECTOR)) {
             String id = manager.createPointGroup(player.getUUID());
@@ -73,6 +74,14 @@ public final class SpellDuelSelectionEvents {
                     : "[法术决斗] 已创建/绑定点位组 " + id));
             event.setCanceled(true);
         }
+    }
+
+    @SubscribeEvent
+    public static void onOpenPlayerSelector(PlayerInteractEvent.RightClickItem event) {
+        if (!(event.getEntity() instanceof ServerPlayer player) || event.getLevel().isClientSide()
+                || player.isCrouching() || !is(event.getItemStack(), SpellDuelItems.PLAYER_SELECTOR)) return;
+        SpellDuelNetwork.sendPlayerSelection(player);
+        event.setCanceled(true);
     }
 
     private static boolean is(ItemStack stack, net.neoforged.neoforge.registries.DeferredItem<?> item) {
