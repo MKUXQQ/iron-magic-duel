@@ -95,6 +95,11 @@ public final class PlayerSelectionScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 1 && Minecraft.getInstance().player != null && Minecraft.getInstance().player.isCrouching()) {
+            Minecraft.getInstance().getConnection().send(new SpellDuelNetwork.CancelSelectionPayload());
+            closeIfOpen();
+            return true;
+        }
         int left = (width - PANEL_WIDTH) / 2;
         int top = (height - PANEL_HEIGHT) / 2;
         int buttonTop = top + PANEL_HEIGHT - 35;
