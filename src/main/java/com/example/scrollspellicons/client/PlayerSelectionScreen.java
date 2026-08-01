@@ -122,7 +122,9 @@ public final class PlayerSelectionScreen extends Screen {
             if (column >= 0 && column < columns && row >= 0) {
                 int index = scroll + row * columns + column;
                 if (index >= 0 && index < players.size()) {
-                    boolean crouching = Minecraft.getInstance().player != null && Minecraft.getInstance().player.isCrouching();
+                    // While a custom screen is open the server-side crouching flag can be
+                    // one tick behind. Read the actual Shift key so sneak-left is reliable.
+                    boolean crouching = Minecraft.getInstance().options.keyShift.isDown();
                     Minecraft.getInstance().getConnection().send(new SpellDuelNetwork.SelectPlayerPayload(
                             players.get(index).id(), (byte) (button == 0 && crouching ? 2 : button == 0 ? 0 : 1)));
                     return true;

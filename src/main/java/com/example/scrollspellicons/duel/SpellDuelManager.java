@@ -62,8 +62,11 @@ public final class SpellDuelManager {
     public String beginEditingGroup(UUID creator) {
         cancelEditingGroup(creator);
         PendingSelection state = selection(creator);
-        String id = nextGroupId();
-        groups.put(id, new SpellDuelGroup(id));
+        SpellDuelGroup reusable = groups.values().stream()
+                .filter(group -> !group.active() && group.teamA().isEmpty() && group.teamB().isEmpty())
+                .findFirst().orElse(null);
+        String id = reusable == null ? nextGroupId() : reusable.id();
+        if (reusable == null) groups.put(id, new SpellDuelGroup(id));
         editingGroups.add(id);
         state.currentGroup = id;
         return id;
@@ -103,9 +106,17 @@ public final class SpellDuelManager {
     public boolean cancelEditingGroup(UUID creator) {
         PendingSelection state = pending.get(creator);
         if (state == null || state.currentGroup == null || !editingGroups.remove(state.currentGroup)) return false;
-        SpellDuelGroup group = groups.remove(state.currentGroup);
-        if (group != null) clearSelectionGlow(groupPlayers(group));
-        catalystGroups.entrySet().removeIf(entry -> state.currentGroup.equals(entry.getValue()));
+        SpellDuelGroup group = groups.get(state.currentGroup);
+        if (group != null) {
+            clearSelectionGlow(groupPlayers(group));
+            // An editor can reuse a group that already owns saved A/B points.
+            // Esc must cancel its players but must never destroy those point settings.
+            if (group.pointA() != null || group.pointB() != null) group.clearPlayers();
+            else {
+                groups.remove(state.currentGroup);
+                catalystGroups.entrySet().removeIf(entry -> state.currentGroup.equals(entry.getValue()));
+            }
+        }
         state.currentGroup = null;
         state.pointA = null;
         state.pointB = null;
@@ -457,12 +468,13 @@ public final class SpellDuelManager {
     }
 
     public void clearPlayers() {
-        groups.values().forEach(group -> {
-            if (!group.active()) {
-                group.clearPlayers();
-            }
-        });
+        for (SpellDuelGroup group : groups.values()) {
+            if (group.active()) finish(group, null);
+            clearSelectionGlow(groupPlayers(group));
+            group.clearPlayers();
+        }
         pending.clear();
+        editingGroups.clear();
     }
 
     public int clearPoints() {
@@ -497,7 +509,12 @@ public final class SpellDuelManager {
         SpellDuelGroup group = groups.get(id);
         if (group == null) return false;
         if (group.active()) finish(group, null);
+        clearSelectionGlow(groupPlayers(group));
         group.clearPlayers();
+        editingGroups.remove(id);
+        pending.values().forEach(selection -> {
+            if (id.equals(selection.currentGroup)) selection.currentGroup = null;
+        });
         return true;
     }
 
