@@ -75,6 +75,13 @@ public final class SpellDuelManager {
         return true;
     }
 
+    public boolean clearSelectedPlayer(UUID selector, UUID target) {
+        PendingSelection state = selection(selector);
+        if (state.players.remove(target) == null) return false;
+        clearSelectionGlow(java.util.Set.of(target));
+        return true;
+    }
+
     public void cancelSelection(UUID selector) {
         PendingSelection state = pending.remove(selector);
         if (state != null) clearSelectionGlow(state.players.keySet());
