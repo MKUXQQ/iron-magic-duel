@@ -32,7 +32,7 @@ public final class ScrollIconResolverSelfTest {
         }
         expect("iron_magic_duel", gradleProperties.getProperty("mod_id"));
         expect("Iron Magic Duel", gradleProperties.getProperty("mod_name"));
-        expect("1.0.47", gradleProperties.getProperty("mod_version"));
+        expect("1.0.48", gradleProperties.getProperty("mod_version"));
         expect("MKUXQQ", gradleProperties.getProperty("mod_authors"));
         expectNot("iron_spell_performance", gradleProperties.getProperty("mod_id"));
         expectNot("Iron Spellcasting Performance", gradleProperties.getProperty("mod_name"));
@@ -52,7 +52,7 @@ public final class ScrollIconResolverSelfTest {
         }
         if (!modsToml.contains("modId = \"iron_magic_duel\"")
                 || !modsToml.contains("displayName = \"Iron Magic Duel\"")
-                || !modsToml.contains("version = \"1.0.47\"")
+                || !modsToml.contains("version = \"1.0.48\"")
                 || !modsToml.contains("authors = \"MKUXQQ\"")
                 || !modsToml.contains("logoFile = \"icon.png\"")
                 || modsToml.contains("modId = \"uilib\"")) {
@@ -75,9 +75,10 @@ public final class ScrollIconResolverSelfTest {
                 || commands.contains("literal(\"groups\")")) {
             throw new AssertionError("duel clear command surface is not the requested group-only form");
         }
-        if (!commands.contains("literal(\"tool\")")
-                || !Files.readString(Path.of("src/main/java/com/example/scrollspellicons/duel/SpellDuelManager.java")).contains("state.players.clear()")) {
-            throw new AssertionError("tool command or per-group player selection reset is missing");
+        String manager = Files.readString(Path.of("src/main/java/com/example/scrollspellicons/duel/SpellDuelManager.java"));
+        if (!commands.contains("literal(\"tool\")") || !manager.contains("beginEditingGroup")
+                || !manager.contains("cancelEditingGroup") || !manager.contains("cancelSelectedPlayer")) {
+            throw new AssertionError("tool command or editing-group player selection flow is missing");
         }
         if (!commands.contains("literal(\"clear\")") || !commands.contains("literal(\"all\")")
                 || !commands.contains("literal(\"group\")") || !commands.contains("literal(\"point\")")) {

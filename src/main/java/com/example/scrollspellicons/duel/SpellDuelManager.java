@@ -30,6 +30,8 @@ import java.util.UUID;
 public final class SpellDuelManager {
     private final MinecraftServer server;
     private final Map<String, SpellDuelGroup> groups = new LinkedHashMap<>();
+    /** Groups which exist only while their creator is using the player picker. */
+    private final Set<String> editingGroups = new LinkedHashSet<>();
     private final Map<UUID, PendingSelection> pending = new HashMap<>();
     private final Map<String, Map<UUID, SavedState>> savedStates = new HashMap<>();
     private final Map<String, PendingRestore> pendingRestores = new HashMap<>();
@@ -56,85 +58,100 @@ public final class SpellDuelManager {
         return pending.computeIfAbsent(player, ignored -> new PendingSelection());
     }
 
-    public void selectPlayer(UUID selector, UUID target, SpellDuelGroup.Team team) {
-        selection(selector).players.put(target, team);
-        ServerPlayer player = server.getPlayerList().getPlayer(target);
-        if (player != null) setSelectionGlow(player);
+    /** Starts a fresh, private editing group every time the picker is opened. */
+    public String beginEditingGroup(UUID creator) {
+        cancelEditingGroup(creator);
+        PendingSelection state = selection(creator);
+        String id = nextGroupId();
+        groups.put(id, new SpellDuelGroup(id));
+        editingGroups.add(id);
+        state.currentGroup = id;
+        return id;
     }
 
-    public boolean toggleSelectedPlayer(UUID selector, UUID target, SpellDuelGroup.Team team) {
-        PendingSelection state = selection(selector);
-        if (state.players.get(target) == team) {
-            state.players.remove(target);
-            clearSelectionGlow(java.util.Set.of(target));
-            return false;
-        }
-        state.players.put(target, team);
+    public boolean addPlayerToEditingGroup(UUID creator, UUID target, SpellDuelGroup.Team team) {
+        PendingSelection state = selection(creator);
+        SpellDuelGroup group = groups.get(state.currentGroup);
+        if (group == null || !editingGroups.contains(group.id()) || group.active()) return false;
+        String selectedGroup = selectedGroup(target);
+        if (selectedGroup != null && !selectedGroup.equals(group.id())) return false;
+        group.add(target, team);
         ServerPlayer player = server.getPlayerList().getPlayer(target);
         if (player != null) setSelectionGlow(player);
         return true;
     }
 
-    public boolean clearSelectedPlayer(UUID selector, UUID target) {
-        PendingSelection state = selection(selector);
-        if (state.players.remove(target) == null) return false;
-        clearSelectionGlow(java.util.Set.of(target));
+    /** Removes a player from whichever non-active group currently owns them. */
+    public boolean cancelSelectedPlayer(UUID target) {
+        String id = selectedGroup(target);
+        SpellDuelGroup group = id == null ? null : groups.get(id);
+        if (group == null || group.active()) return false;
+        boolean removed = group.add(target, null);
+        if (removed) clearSelectionGlow(Set.of(target));
+        return removed;
+    }
+
+    public boolean finalizeEditingGroup(UUID creator) {
+        PendingSelection state = selection(creator);
+        if (state.currentGroup == null || !editingGroups.remove(state.currentGroup)) return false;
+        SpellDuelGroup group = groups.get(state.currentGroup);
+        if (group != null) clearSelectionGlow(groupPlayers(group));
         return true;
     }
 
-    public void cancelSelection(UUID selector) {
-        PendingSelection state = pending.remove(selector);
-        if (state != null) clearSelectionGlow(state.players.keySet());
+    /** Esc cancels the current edit: remove its temporary group and every selected player. */
+    public boolean cancelEditingGroup(UUID creator) {
+        PendingSelection state = pending.get(creator);
+        if (state == null || state.currentGroup == null || !editingGroups.remove(state.currentGroup)) return false;
+        SpellDuelGroup group = groups.remove(state.currentGroup);
+        if (group != null) clearSelectionGlow(groupPlayers(group));
+        catalystGroups.entrySet().removeIf(entry -> state.currentGroup.equals(entry.getValue()));
+        state.currentGroup = null;
+        state.pointA = null;
+        state.pointB = null;
+        savePoints();
+        return true;
     }
 
-    public boolean isSelectedByOther(UUID selector, UUID target) {
-        for (var entry : pending.entrySet()) {
-            if (!entry.getKey().equals(selector) && entry.getValue().players.containsKey(target)) return true;
-        }
-        for (SpellDuelGroup group : groups.values()) {
-            if (group.contains(target)) return true;
-        }
-        return false;
+    public String selectedGroup(UUID target) {
+        for (SpellDuelGroup group : groups.values()) if (group.contains(target)) return group.id();
+        return null;
     }
 
     public SpellDuelGroup.Team selectedTeam(UUID selector, UUID target) {
-        return selection(selector).players.get(target);
+        PendingSelection state = selection(selector);
+        SpellDuelGroup group = groups.get(state.currentGroup);
+        return group == null ? null : group.teamOf(target);
     }
 
-    public String createGroup(UUID creator) {
-        PendingSelection state = selection(creator);
-        SpellDuelGroup existing = state.currentGroup == null ? null : groups.get(state.currentGroup);
-        if (existing == null || existing.active() || !existing.teamA().isEmpty() && !existing.teamB().isEmpty()) {
-            existing = groups.values().stream()
-                    .filter(group -> !group.active() && (group.teamA().isEmpty() || group.teamB().isEmpty())
-                            && group.pointA() != null && group.pointB() != null)
-                    .findFirst().orElse(null);
-        }
-        if (existing != null && !existing.active() && (existing.teamA().isEmpty() || existing.teamB().isEmpty())) {
-            state.players.forEach(existing::add);
-            clearSelectionGlow(state.players.keySet());
-            state.players.clear();
-            state.currentGroup = existing.id();
-            return existing.id();
-        }
-        String id;
+    public boolean isEditingGroup(String id) { return editingGroups.contains(id); }
+
+    private String nextGroupId() {
         int n = 1;
+        String id;
         do id = "duel_" + n++; while (groups.containsKey(id));
-        SpellDuelGroup group = new SpellDuelGroup(id);
-        state.players.forEach((player, team) -> group.add(player, team));
-        clearSelectionGlow(state.players.keySet());
-        state.players.clear();
-        groups.put(id, group);
-        savePoints();
-        state.currentGroup = id;
         return id;
+    }
+
+    private static Set<UUID> groupPlayers(SpellDuelGroup group) {
+        Set<UUID> result = new LinkedHashSet<>(group.teamA());
+        result.addAll(group.teamB());
+        return result;
     }
 
     public String createPointGroup(UUID creator) {
         PendingSelection state = selection(creator);
         if (state.pointA == null || state.pointB == null) return null;
         SpellDuelGroup existing = state.currentGroup == null ? null : groups.get(state.currentGroup);
-        if (existing == null || existing.active() || existing.pointA() != null && existing.pointB() != null) {
+        if (existing != null && !existing.active()) {
+            existing.setPoint(SpellDuelGroup.Team.A, state.pointA);
+            existing.setPoint(SpellDuelGroup.Team.B, state.pointB);
+            state.pointA = null;
+            state.pointB = null;
+            savePoints();
+            return existing.id();
+        }
+        if (existing == null || existing.active()) {
             existing = groups.values().stream()
                     .filter(group -> !group.active() && (group.pointA() == null || group.pointB() == null)
                             && !group.teamA().isEmpty() && !group.teamB().isEmpty())
@@ -145,19 +162,13 @@ public final class SpellDuelManager {
             existing.setPoint(SpellDuelGroup.Team.B, state.pointB);
             state.pointA = null;
             state.pointB = null;
-            clearSelectionGlow(state.players.keySet());
-            state.players.clear();
             state.currentGroup = existing.id();
             return existing.id();
         }
-        String id;
-        int n = 1;
-        do id = "duel_" + n++; while (groups.containsKey(id));
+        String id = nextGroupId();
         SpellDuelGroup group = new SpellDuelGroup(id);
         group.setPoint(SpellDuelGroup.Team.A, state.pointA);
         group.setPoint(SpellDuelGroup.Team.B, state.pointB);
-        clearSelectionGlow(state.players.keySet());
-        state.players.clear();
         groups.put(id, group);
         savePoints();
         state.currentGroup = id;
@@ -185,13 +196,14 @@ public final class SpellDuelManager {
         for (UUID uuid : players) {
             ServerPlayer player = server.getPlayerList().getPlayer(uuid);
             if (player == null) continue;
-            scoreboard.removePlayerFromTeam(player.getScoreboardName());
+            boolean wasGlowingSelection = glowTeam != null && glowTeam.getPlayers().contains(player.getScoreboardName());
+            if (wasGlowingSelection) scoreboard.removePlayerFromTeam(player.getScoreboardName());
             String oldTeamName = previousTeams.remove(uuid);
-            if (oldTeamName != null) {
+            if (wasGlowingSelection && oldTeamName != null) {
                 PlayerTeam oldTeam = scoreboard.getPlayerTeam(oldTeamName);
                 if (oldTeam != null) scoreboard.addPlayerToTeam(player.getScoreboardName(), oldTeam);
             }
-            player.setGlowingTag(false);
+            if (wasGlowingSelection) player.setGlowingTag(false);
         }
         if (glowTeam != null && glowTeam.getPlayers().isEmpty()) scoreboard.removePlayerTeam(glowTeam);
     }
@@ -255,6 +267,7 @@ public final class SpellDuelManager {
     public String start(String id) {
         SpellDuelGroup group = groups.get(id);
         if (group == null) return "不存在决斗组 " + id;
+        if (editingGroups.contains(id)) return "决斗组 " + id + " 仍在编辑中，请先点击创建对战";
         if (group.active()) return "决斗组 " + id + " 已经在进行中";
         if (pendingRestores.containsKey(id)) return "决斗组 " + id + " 正在等待返回，剩余 "
                 + Math.max(1, (pendingRestores.get(id).ticks() + 19) / 20) + " 秒";
@@ -504,6 +517,7 @@ public final class SpellDuelManager {
         if (group == null) return false;
         if (group.active()) finish(group, null);
         groups.remove(id);
+        editingGroups.remove(id);
         catalystGroups.entrySet().removeIf(entry -> id.equals(entry.getValue()));
         pending.values().forEach(selection -> {
             if (id.equals(selection.currentGroup)) selection.currentGroup = null;
@@ -520,6 +534,7 @@ public final class SpellDuelManager {
             catalystGroups.entrySet().removeIf(entry -> id.equals(entry.getValue()));
         }
         pending.clear();
+        editingGroups.clear();
         return cleared;
     }
 
@@ -531,7 +546,6 @@ public final class SpellDuelManager {
     private final Map<UUID, String> spectatorGroups = new HashMap<>();
 
     public static final class PendingSelection {
-        private final Map<UUID, SpellDuelGroup.Team> players = new LinkedHashMap<>();
         private SpellDuelGroup.PointLocation pointA;
         private SpellDuelGroup.PointLocation pointB;
         private String currentGroup;

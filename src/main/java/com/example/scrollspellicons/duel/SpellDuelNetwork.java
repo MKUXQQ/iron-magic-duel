@@ -99,14 +99,14 @@ public final class SpellDuelNetwork {
                 for (PlayerChoice player : payload.players) {
                     buf.writeUUID(player.id);
                     buf.writeUtf(player.name, 64);
-                    buf.writeBoolean(player.selectedByOther);
+                    buf.writeUtf(player.selectedGroup, 64);
                     buf.writeByte(player.ownTeam);
                 }
             },
             buf -> {
                 List<PlayerChoice> players = new ArrayList<>();
                 for (int i = 0, count = buf.readVarInt(); i < count; i++) {
-                    players.add(new PlayerChoice(buf.readUUID(), buf.readUtf(64), buf.readBoolean(), buf.readByte()));
+                    players.add(new PlayerChoice(buf.readUUID(), buf.readUtf(64), buf.readUtf(64), buf.readByte()));
                 }
                 return new PlayerSelectionPayload(players);
             });
@@ -176,8 +176,9 @@ public final class SpellDuelNetwork {
         List<PlayerChoice> choices = new ArrayList<>();
         for (ServerPlayer online : player.getServer().getPlayerList().getPlayers()) {
             SpellDuelGroup.Team team = manager.selectedTeam(player.getUUID(), online.getUUID());
+            String groupId = manager.selectedGroup(online.getUUID());
             choices.add(new PlayerChoice(online.getUUID(), online.getGameProfile().getName(),
-                    manager.isSelectedByOther(player.getUUID(), online.getUUID()), team == null ? -1 : team == SpellDuelGroup.Team.A ? 0 : 1));
+                    groupId == null ? "" : groupId, team == null ? -1 : team == SpellDuelGroup.Team.A ? 0 : 1));
         }
         PacketDistributor.sendToPlayer(player, new PlayerSelectionPayload(choices));
     }
@@ -199,15 +200,11 @@ public final class SpellDuelNetwork {
             if (!(context.player() instanceof ServerPlayer selector)) return;
             SpellDuelManager manager = SpellDuelEvents.manager(selector.getServer());
             if (payload.team == 2) {
-                manager.clearSelectedPlayer(selector.getUUID(), payload.target);
+                manager.cancelSelectedPlayer(payload.target);
                 sendPlayerSelection(selector);
                 return;
             }
-            if (manager.isSelectedByOther(selector.getUUID(), payload.target)) {
-                sendPlayerSelection(selector);
-                return;
-            }
-            manager.toggleSelectedPlayer(selector.getUUID(), payload.target,
+            manager.addPlayerToEditingGroup(selector.getUUID(), payload.target,
                     payload.team == 0 ? SpellDuelGroup.Team.A : SpellDuelGroup.Team.B);
             sendPlayerSelection(selector);
         });
@@ -216,7 +213,9 @@ public final class SpellDuelNetwork {
     private static void handleCreateSelection(CreateSelectionPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer selector)) return;
-            String id = SpellDuelEvents.manager(selector.getServer()).createGroup(selector.getUUID());
+            SpellDuelManager manager = SpellDuelEvents.manager(selector.getServer());
+            String id = manager.currentGroup(selector.getUUID());
+            if (!manager.finalizeEditingGroup(selector.getUUID())) return;
             selector.playNotifySound(net.minecraft.sounds.SoundEvents.PLAYER_LEVELUP, net.minecraft.sounds.SoundSource.PLAYERS, 1.0F, 1.0F);
             selector.sendSystemMessage(net.minecraft.network.chat.Component.literal("[法术决斗] 已创建决斗组 " + id));
             sendSelectionClose(selector);
@@ -226,7 +225,7 @@ public final class SpellDuelNetwork {
     private static void handleCancelSelection(CancelSelectionPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer selector)) return;
-            SpellDuelEvents.manager(selector.getServer()).cancelSelection(selector.getUUID());
+            SpellDuelEvents.manager(selector.getServer()).cancelEditingGroup(selector.getUUID());
             sendSelectionClose(selector);
         });
     }
@@ -313,7 +312,7 @@ public final class SpellDuelNetwork {
         @Override public Type<? extends CustomPacketPayload> type() { return PLAYER_SELECTION_TYPE; }
     }
 
-    public record PlayerChoice(UUID id, String name, boolean selectedByOther, int ownTeam) {}
+    public record PlayerChoice(UUID id, String name, String selectedGroup, int ownTeam) {}
 
     public record SelectPlayerPayload(UUID target, byte team) implements CustomPacketPayload {
         @Override public Type<? extends CustomPacketPayload> type() { return SELECT_PLAYER_TYPE; }

@@ -11,7 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Centered online-player picker opened by the player selector. */
+/** Centered online-player picker.  Esc deletes its current editing group. */
 public final class PlayerSelectionScreen extends Screen {
     private static PlayerSelectionScreen current;
     private final List<SpellDuelNetwork.PlayerChoice> players;
@@ -52,7 +52,7 @@ public final class PlayerSelectionScreen extends Screen {
         graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xFF111111);
         graphics.fill(left + 2, top + 2, left + panelWidth - 2, top + 34, 0xFF303030);
         graphics.drawString(font, "选择在线玩家进行对战", left + 12, top + 12, 0xFFFFFF, false);
-        graphics.drawString(font, "左键：A队  右键：B队  再次点击可取消", left + 12, top + 24, 0xBBBBBB, false);
+        graphics.drawString(font, "左键：A队  右键：B队  蹲下左键：取消  Esc：取消本次编辑", left + 12, top + 24, 0xBBBBBB, false);
 
         int listTop = top + 42;
         int listBottom = top + panelHeight - 45;
@@ -67,13 +67,14 @@ public final class PlayerSelectionScreen extends Screen {
             int y = listTop + 4 + row * ROW_HEIGHT;
             if (y + ROW_HEIGHT > listBottom) break;
             SpellDuelNetwork.PlayerChoice choice = players.get(index);
+            boolean locked = !choice.selectedGroup().isEmpty() && choice.ownTeam() < 0;
             boolean hover = mouseX >= x && mouseX < x + rowWidth - 4 && mouseY >= y && mouseY < y + ROW_HEIGHT - 2;
             graphics.fill(x, y, x + rowWidth - 6, y + ROW_HEIGHT - 3, hover ? 0xFF454545 : 0xFF2B2B2B);
             drawFace(graphics, choice.id(), x + 6, y + 6);
-            int color = choice.selectedByOther() ? 0xFFFF5555 : 0xFFFFFF;
-            graphics.drawString(font, choice.name(), x + 32, y + 5, color, false);
-            String state = choice.selectedByOther() ? "已被其他决斗组选中" : choice.ownTeam() == 0 ? "已选 A 队" : choice.ownTeam() == 1 ? "已选 B 队" : "未选择";
-            graphics.drawString(font, state, x + 32, y + 17, choice.selectedByOther() ? 0xFFFF7777 : 0xAAAAAA, false);
+            graphics.drawString(font, choice.name(), x + 32, y + 5, locked ? 0xFFFF5555 : 0xFFFFFF, false);
+            String state = choice.ownTeam() == 0 ? "已选 A 队" : choice.ownTeam() == 1 ? "已选 B 队"
+                    : locked ? "已被 " + choice.selectedGroup() + " 选中" : "未选择";
+            graphics.drawString(font, state, x + 32, y + 17, locked ? 0xFFFF7777 : 0xAAAAAA, false);
         }
         if (players.size() > scroll + visibleRows() * columns) {
             graphics.drawString(font, "滚轮查看更多玩家", left + panelWidth - 118, top + panelHeight - 58, 0xAAAAAA, false);
@@ -87,11 +88,8 @@ public final class PlayerSelectionScreen extends Screen {
     }
 
     private int columns() { return players.size() <= 6 ? 1 : 2; }
-
     private int visibleRows() { return Math.min(6, Math.max(1, (players.size() + columns() - 1) / columns())); }
-
     private int panelWidth() { return columns() == 1 ? SINGLE_COLUMN_WIDTH : DOUBLE_COLUMN_WIDTH; }
-
     private int panelHeight() { return 42 + visibleRows() * ROW_HEIGHT + 45; }
 
     private void drawFace(GuiGraphics graphics, java.util.UUID id, int x, int y) {
@@ -104,11 +102,6 @@ public final class PlayerSelectionScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 1 && Minecraft.getInstance().player != null && Minecraft.getInstance().player.isCrouching()) {
-            Minecraft.getInstance().getConnection().send(new SpellDuelNetwork.CancelSelectionPayload());
-            closeIfOpen();
-            return true;
-        }
         int panelWidth = panelWidth();
         int panelHeight = panelHeight();
         int left = (width - panelWidth) / 2;
@@ -147,13 +140,8 @@ public final class PlayerSelectionScreen extends Screen {
         return true;
     }
 
-    @Override
-    public boolean isPauseScreen() { return false; }
-
-    @Override
-    protected void renderBlurredBackground(float partialTick) {
-        // Keep the world sharp behind this player picker; the panel itself is opaque.
-    }
+    @Override public boolean isPauseScreen() { return false; }
+    @Override protected void renderBlurredBackground(float partialTick) { }
 
     @Override
     public void onClose() {
