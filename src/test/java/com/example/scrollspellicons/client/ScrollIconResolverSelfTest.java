@@ -32,7 +32,7 @@ public final class ScrollIconResolverSelfTest {
         }
         expect("iron_magic_duel", gradleProperties.getProperty("mod_id"));
         expect("Iron Magic Duel", gradleProperties.getProperty("mod_name"));
-        expect("1.0.45", gradleProperties.getProperty("mod_version"));
+        expect("1.0.46", gradleProperties.getProperty("mod_version"));
         expect("MKUXQQ", gradleProperties.getProperty("mod_authors"));
         expectNot("iron_spell_performance", gradleProperties.getProperty("mod_id"));
         expectNot("Iron Spellcasting Performance", gradleProperties.getProperty("mod_name"));
@@ -52,7 +52,7 @@ public final class ScrollIconResolverSelfTest {
         }
         if (!modsToml.contains("modId = \"iron_magic_duel\"")
                 || !modsToml.contains("displayName = \"Iron Magic Duel\"")
-                || !modsToml.contains("version = \"1.0.45\"")
+                || !modsToml.contains("version = \"1.0.46\"")
                 || !modsToml.contains("authors = \"MKUXQQ\"")
                 || !modsToml.contains("logoFile = \"icon.png\"")
                 || modsToml.contains("modId = \"uilib\"")) {

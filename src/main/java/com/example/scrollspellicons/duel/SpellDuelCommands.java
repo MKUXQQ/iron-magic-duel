@@ -101,7 +101,7 @@ public final class SpellDuelCommands {
         for (String name : PerformanceConfig.SERVER.fakePlayers.get()) {
             server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "player " + name + " spawn");
         }
-        source.sendSuccess(() -> Component.literal("[法术决斗] 已执行四个假人创建指令"), true);
+        source.sendSuccess(() -> Component.literal("[法术决斗] 已召唤假人"), true);
         return 1;
     }
 

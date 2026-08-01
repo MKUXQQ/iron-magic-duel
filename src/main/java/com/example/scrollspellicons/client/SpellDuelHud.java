@@ -113,7 +113,6 @@ public final class SpellDuelHud {
         graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF555555);
         graphics.fill(x + 3, y + 3, x + width - 3, y + height - 3, 0xFF0B0B0B);
         graphics.fill(x + 3, y + 3, x + width - 3, y + 21, 0xFF121212);
-        graphics.fill(x + 3, y + 20, x + width - 3, y + 21, 0xFF3A3A3A);
     }
 
     private static void renderLocalPlayerFace(GuiGraphics graphics, Minecraft mc, int x, int y) {
@@ -265,7 +264,11 @@ public final class SpellDuelHud {
         int seconds = cooldownSeconds(cooldownTicks);
         if (seconds <= 0) return;
         String value = Integer.toString(seconds);
-        graphics.fill(x, y, x + 16, y + 16, 0xB8000000);
+        graphics.fill(x, y, x + 16, y + 16, 0xD9000000);
+        graphics.fill(x, y, x + 16, y + 1, 0xFFFFC94D);
+        graphics.fill(x, y + 15, x + 16, y + 16, 0xFFFFC94D);
+        graphics.fill(x, y, x + 1, y + 16, 0xFFFFC94D);
+        graphics.fill(x + 15, y, x + 16, y + 16, 0xFFFFC94D);
         graphics.drawCenteredString(mc.font, value, x + 8, y + 4, 0xFFFFFFFF);
     }
 
