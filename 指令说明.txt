@@ -1,6 +1,6 @@
 铁魔法决斗（Iron Magic Duel）
 指令与功能说明
-版本：1.0.43
+版本：1.0.44
 适用版本：Minecraft 1.21.1 / NeoForge 21.1.233
 
 一、权限说明
@@ -161,7 +161,7 @@ iron_magic_shop.nbt 会在找不到 JSON 时自动迁移一次。
 
 十二、安装
 
-将 iron_magic_duel-1.0.43.jar 放入服务端和客户端的 mods 文件夹。
+将 iron_magic_duel-1.0.44.jar 放入服务端和客户端的 mods 文件夹。
 服务端和客户端都需要 Minecraft 1.21.1、NeoForge 21.1.233，以及项目声明的依赖模组。
 
 十三、生命恢复规则（1.0.40）

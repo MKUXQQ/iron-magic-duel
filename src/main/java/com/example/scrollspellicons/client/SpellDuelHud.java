@@ -89,17 +89,18 @@ public final class SpellDuelHud {
         List<SpellVisual> spells = spells(mc.player);
         int hudWidth = hudWidth(spells.size());
         int spellHeight = spellRows(spells.size()) * 18 + 6;
-        int panelWidth = PLAYER_FACE_SIZE + 8 + hudWidth;
-        int panelHeight = 16 + spellHeight + 4 + 20 + 3 + 20 + 4;
+        int panelWidth = PLAYER_FACE_SIZE + 12 + hudWidth;
+        int panelHeight = 22 + spellHeight + 5 + 20 + 4 + 20 + 7;
         int x = hudX(graphics, panelWidth);
         int y = hudY(graphics, panelHeight);
-        int contentX = x + PLAYER_FACE_SIZE + 6;
-        int spellY = y + 16;
-        int healthY = spellY + spellHeight + 4;
-        int manaY = healthY + 23;
+        int contentX = x + PLAYER_FACE_SIZE + 8;
+        int spellY = y + 22;
+        int healthY = spellY + spellHeight + 5;
+        int manaY = healthY + 24;
         drawLocalPanelFrame(graphics, x, y, panelWidth, panelHeight);
-        renderLocalPlayerFace(graphics, mc, x + 4, y + 4);
-        graphics.drawString(mc.font, mc.player.getName().getString(), contentX, y + 3, 0xFFFFFF, true);
+        renderLocalPlayerFace(graphics, mc, x + 5, y + 5);
+        graphics.drawString(mc.font, "法术状态", contentX, y + 4, 0x7FD9FF, true);
+        graphics.drawString(mc.font, mc.player.getName().getString(), contentX, y + 13, 0xFFFFFF, true);
         drawSpellBox(graphics, mc, spells, contentX, spellY, hudWidth, spellHeight);
         drawHealthBox(graphics, mc, contentX, healthY, hudWidth, mc.player.getHealth(), mc.player.getMaxHealth());
         drawManaBox(graphics, mc, contentX, manaY, hudWidth, ClientMagicData.getPlayerMana(),
@@ -115,8 +116,12 @@ public final class SpellDuelHud {
     }
 
     private static void drawLocalPanelFrame(GuiGraphics graphics, int x, int y, int width, int height) {
-        graphics.fill(x, y, x + width, y + height, 0xFF080808);
-        graphics.fill(x + 2, y + 2, x + width - 2, y + height - 2, 0xC0181818);
+        graphics.fill(x + 3, y + 4, x + width + 3, y + height + 4, 0x66000000);
+        graphics.fill(x, y, x + width, y + height, 0xFF080A0F);
+        graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF53616D);
+        graphics.fill(x + 3, y + 3, x + width - 3, y + height - 3, 0xF012151B);
+        graphics.fill(x + 3, y + 3, x + width - 3, y + 5, 0xFF42BCEB);
+        graphics.fill(x + 3, y + 6, x + width - 3, y + 21, 0xFF1D2731);
     }
 
     private static void renderLocalPlayerFace(GuiGraphics graphics, Minecraft mc, int x, int y) {
@@ -213,9 +218,9 @@ public final class SpellDuelHud {
     }
 
     private static void drawFrame(GuiGraphics graphics, int x, int y, int width, int height) {
-        GuiGraphicsUtils.blitNineSliced(graphics, VANILLA_WIDGETS_FRAME, x, y, width, height,
-                2, 2, 2, 2, 200, 20, 0, 66);
-        graphics.fill(x + 3, y + 3, x + width - 3, y + height - 3, 0xFF111111);
+        graphics.fill(x, y, x + width, y + height, 0xFF07090D);
+        graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF5A6874);
+        graphics.fill(x + 3, y + 3, x + width - 3, y + height - 3, 0xFF151A21);
     }
 
     private static int spellRows(int count) {

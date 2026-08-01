@@ -32,7 +32,7 @@ public final class ScrollIconResolverSelfTest {
         }
         expect("iron_magic_duel", gradleProperties.getProperty("mod_id"));
         expect("Iron Magic Duel", gradleProperties.getProperty("mod_name"));
-        expect("1.0.43", gradleProperties.getProperty("mod_version"));
+        expect("1.0.44", gradleProperties.getProperty("mod_version"));
         expect("MKUXQQ", gradleProperties.getProperty("mod_authors"));
         expectNot("iron_spell_performance", gradleProperties.getProperty("mod_id"));
         expectNot("Iron Spellcasting Performance", gradleProperties.getProperty("mod_name"));
@@ -52,7 +52,7 @@ public final class ScrollIconResolverSelfTest {
         }
         if (!modsToml.contains("modId = \"iron_magic_duel\"")
                 || !modsToml.contains("displayName = \"Iron Magic Duel\"")
-                || !modsToml.contains("version = \"1.0.43\"")
+                || !modsToml.contains("version = \"1.0.44\"")
                 || !modsToml.contains("authors = \"MKUXQQ\"")
                 || !modsToml.contains("logoFile = \"icon.png\"")
                 || !modsToml.contains("modId = \"uilib\"")) {
@@ -98,8 +98,8 @@ public final class ScrollIconResolverSelfTest {
         if (hud.contains("RenderNameTagEvent") || !hud.contains("renderSpellIcon")
                 || !hud.contains("GREEN") || !hud.contains("entry.cooldowns()")
                 || !hud.contains("SPELL_BOX_WIDTH") || !hud.contains("drawHealthBox")
-                || !hud.contains("GuiGraphicsUtils.blitNineSliced")
-                || !hud.contains("VANILLA_WIDGETS_FRAME")
+                || !hud.contains("drawLocalPanelFrame")
+                || !hud.contains("0xFF42BCEB")
                 || hud.contains("UILIB_FRAME") || !hud.contains("0xFF33AA55")
                 || !hud.contains("hudWidth(int spellCount)") || !hud.contains("SPELL_COLUMNS = 6")
                 || !hud.contains("Float.isFinite(health)") || !hud.contains("renderLocalSpellHud")

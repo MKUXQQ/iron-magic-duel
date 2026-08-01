@@ -13,8 +13,9 @@ public final class SpellDuelClientState {
     private static String snapshotGroup = "";
     private static java.util.List<com.example.scrollspellicons.duel.SpellDuelNetwork.SnapshotEntry> snapshot = java.util.List.of();
     private static Map<UUID, Map<String, SyncedCooldown>> cooldowns = Map.of();
-    private static int hudX = 340;
-    private static int hudY = 575;
+    // A large X is clamped to the right edge by SpellDuelHud; Y keeps the HUD at the top.
+    private static int hudX = 10000;
+    private static int hudY = 8;
 
     private SpellDuelClientState() {}
 
