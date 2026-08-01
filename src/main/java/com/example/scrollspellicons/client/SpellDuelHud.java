@@ -14,6 +14,7 @@ import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -263,6 +264,12 @@ public final class SpellDuelHud {
         ResourceLocation spriteId = ResourceLocation.fromNamespaceAndPath(icon.getNamespace(),
                 icon.getPath().substring("textures/".length(), icon.getPath().length() - ".png".length()));
         TextureAtlasSprite sprite = mc.getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(spriteId);
+        if (sprite.contents().name().equals(MissingTextureAtlasSprite.getLocation())) {
+            graphics.fill(x, y, x + 16, y + 16, 0xFF111111);
+            graphics.fill(x + 2, y + 2, x + 14, y + 14, 0xFF555555);
+            drawCooldownNumber(graphics, mc, x, y, visual.cooldownTicks());
+            return;
+        }
         graphics.blit(x, y, 0, 16, 16, sprite);
         drawCooldownNumber(graphics, mc, x, y, visual.cooldownTicks());
     }

@@ -17,6 +17,7 @@ public final class IronSpellPerformance {
 
     public IronSpellPerformance(IEventBus modEventBus, ModContainer modContainer) {
         SpellDuelItems.ITEMS.register(modEventBus);
+        SpellDuelItems.TABS.register(modEventBus);
         modEventBus.addListener(SpellDuelItems::addToCreativeTab);
         modEventBus.addListener(SpellDuelNetwork::register);
         modContainer.registerConfig(ModConfig.Type.CLIENT, PerformanceConfig.CLIENT_SPEC);
