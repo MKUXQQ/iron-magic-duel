@@ -7,7 +7,6 @@ import io.redspace.ironsspellbooks.api.spells.SpellSlot;
 import io.redspace.ironsspellbooks.capabilities.magic.CooldownInstance;
 import io.redspace.ironsspellbooks.compat.Curios;
 import io.redspace.ironsspellbooks.player.ClientMagicData;
-import com.daqem.uilib.client.util.GuiGraphicsUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.PlayerFaceRenderer;
@@ -43,12 +42,6 @@ public final class SpellDuelHud {
     // GuiGraphics colors are ARGB. Without FF this bar is fully transparent.
     private static final int GREEN = 0xFF33AA55;
     private static final int BLUE = 0xFF2A8FE8;
-    // Keep UILib's nine-slice renderer, but use the vanilla widget atlas' button
-    // frame. UILib gui.png (0,0) is the scrollbar texture, which caused repeated
-    // vertical bars to appear around every spell and health panel.
-    private static final ResourceLocation VANILLA_WIDGETS_FRAME =
-            ResourceLocation.withDefaultNamespace("textures/gui/widgets.png");
-
     private SpellDuelHud() {}
 
     @SubscribeEvent
@@ -78,7 +71,7 @@ public final class SpellDuelHud {
         int y = Math.round(screen[1]) - panelHeight - 4;
         int contentX = x + (panelWidth - hudWidth) / 2;
         int healthY = y + spellHeight + 2;
-        graphics.fill(x - 3, y - 3, x + panelWidth + 3, y + panelHeight + 3, 0xB0000000);
+        graphics.fill(x, y, x + panelWidth, y + panelHeight, 0xFF000000);
         drawSpellBox(graphics, mc, spells, contentX, y, hudWidth, spellHeight);
         drawHealthBox(graphics, mc, contentX, healthY, hudWidth, player.getHealth(), player.getMaxHealth());
         graphics.drawString(mc.font, name, x + (panelWidth - mc.font.width(name)) / 2,
@@ -99,8 +92,7 @@ public final class SpellDuelHud {
         int manaY = healthY + 24;
         drawLocalPanelFrame(graphics, x, y, panelWidth, panelHeight);
         renderLocalPlayerFace(graphics, mc, x + 5, y + 5);
-        graphics.drawString(mc.font, "法术状态", contentX, y + 4, 0x7FD9FF, true);
-        graphics.drawString(mc.font, mc.player.getName().getString(), contentX, y + 13, 0xFFFFFF, true);
+        graphics.drawString(mc.font, mc.player.getName().getString(), contentX, y + 7, 0xFFFFFFFF, true);
         drawSpellBox(graphics, mc, spells, contentX, spellY, hudWidth, spellHeight);
         drawHealthBox(graphics, mc, contentX, healthY, hudWidth, mc.player.getHealth(), mc.player.getMaxHealth());
         drawManaBox(graphics, mc, contentX, manaY, hudWidth, ClientMagicData.getPlayerMana(),
@@ -108,7 +100,8 @@ public final class SpellDuelHud {
     }
 
     private static int hudX(GuiGraphics graphics, int panelWidth) {
-        return Math.max(0, Math.min(SpellDuelClientState.hudX(), graphics.guiWidth() - panelWidth));
+        int rightMargin = SpellDuelClientState.hudX() >= 9000 ? HUD_MARGIN : 0;
+        return Math.max(0, Math.min(SpellDuelClientState.hudX(), graphics.guiWidth() - panelWidth - rightMargin));
     }
 
     private static int hudY(GuiGraphics graphics, int panelHeight) {
@@ -116,12 +109,11 @@ public final class SpellDuelHud {
     }
 
     private static void drawLocalPanelFrame(GuiGraphics graphics, int x, int y, int width, int height) {
-        graphics.fill(x + 3, y + 4, x + width + 3, y + height + 4, 0x66000000);
-        graphics.fill(x, y, x + width, y + height, 0xFF080A0F);
-        graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF53616D);
-        graphics.fill(x + 3, y + 3, x + width - 3, y + height - 3, 0xF012151B);
-        graphics.fill(x + 3, y + 3, x + width - 3, y + 5, 0xFF42BCEB);
-        graphics.fill(x + 3, y + 6, x + width - 3, y + 21, 0xFF1D2731);
+        graphics.fill(x, y, x + width, y + height, 0xFF000000);
+        graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF555555);
+        graphics.fill(x + 3, y + 3, x + width - 3, y + height - 3, 0xFF0B0B0B);
+        graphics.fill(x + 3, y + 3, x + width - 3, y + 21, 0xFF121212);
+        graphics.fill(x + 3, y + 20, x + width - 3, y + 21, 0xFF3A3A3A);
     }
 
     private static void renderLocalPlayerFace(GuiGraphics graphics, Minecraft mc, int x, int y) {
@@ -187,40 +179,30 @@ public final class SpellDuelHud {
 
     private static void drawHealthBox(GuiGraphics graphics, Minecraft mc, int x, int y, int width,
                                       float health, float maxHealth) {
-        // Draw the health frame with solid rectangles. The textured nine-slice
-        // frame can be batched after fills by some render types and cover the bar.
-        graphics.fill(x, y, x + width, y + 20, 0, 0xFF080808);
-        graphics.fill(x + 2, y + 2, x + width - 2, y + 18, 0, 0xFF666666);
         float ratio = maxHealth > 0 && Float.isFinite(health) && Float.isFinite(maxHealth)
                 ? Math.max(0, Math.min(1, health / maxHealth)) : 0;
-        int innerX = x + 4;
-        int innerY = y + 5;
-        int barWidth = width - 8;
-        graphics.fill(innerX, innerY, innerX + barWidth, innerY + 10, 0, 0xFF202020);
-        int filledWidth = Math.round((barWidth - 2) * ratio);
-        if (filledWidth > 0) {
-            graphics.fill(innerX + 1, innerY + 1, innerX + 1 + filledWidth, innerY + 9, 0, GREEN);
-        }
+        drawStatusBar(graphics, x, y, width, ratio, GREEN);
     }
 
     private static void drawManaBox(GuiGraphics graphics, Minecraft mc, int x, int y, int width,
                                     float mana, float maxMana) {
         float ratio = maxMana > 0 && Float.isFinite(mana) && Float.isFinite(maxMana)
                 ? Math.max(0, Math.min(1, mana / maxMana)) : 0;
-        // Unified mana bar: black outer plate, gray outline, black track, blue fill.
+        drawStatusBar(graphics, x, y, width, ratio, BLUE);
+    }
+
+    private static void drawStatusBar(GuiGraphics graphics, int x, int y, int width, float ratio, int fillColor) {
         graphics.fill(x, y, x + width, y + 20, 0xFF000000);
-        graphics.fill(x + 2, y + 2, x + width - 2, y + 18, 0xFF707070);
-        graphics.fill(x + 5, y + 5, x + width - 5, y + 15, 0xFF171717);
+        graphics.fill(x + 2, y + 2, x + width - 2, y + 18, 0xFF555555);
+        graphics.fill(x + 5, y + 5, x + width - 5, y + 15, 0xFF161616);
         int filledWidth = Math.round((width - 10) * ratio);
-        if (filledWidth > 0) {
-            graphics.fill(x + 5, y + 5, x + 5 + filledWidth, y + 15, 0xFF2A91E5);
-        }
+        if (filledWidth > 0) graphics.fill(x + 5, y + 5, x + 5 + filledWidth, y + 15, fillColor);
     }
 
     private static void drawFrame(GuiGraphics graphics, int x, int y, int width, int height) {
         graphics.fill(x, y, x + width, y + height, 0xFF07090D);
-        graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF5A6874);
-        graphics.fill(x + 3, y + 3, x + width - 3, y + height - 3, 0xFF151A21);
+        graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF555555);
+        graphics.fill(x + 3, y + 3, x + width - 3, y + height - 3, 0xFF151515);
     }
 
     private static int spellRows(int count) {
@@ -283,9 +265,8 @@ public final class SpellDuelHud {
         int seconds = cooldownSeconds(cooldownTicks);
         if (seconds <= 0) return;
         String value = Integer.toString(seconds);
-        int textX = x + 15 - mc.font.width(value);
-        graphics.fill(textX - 1, y + 8, x + 16, y + 16, 0xB0000000);
-        graphics.drawString(mc.font, value, textX, y + 8, 0xFFFFFF, true);
+        graphics.fill(x, y, x + 16, y + 16, 0xB8000000);
+        graphics.drawCenteredString(mc.font, value, x + 8, y + 4, 0xFFFFFFFF);
     }
 
     private static int cooldownSeconds(int cooldownTicks) {

@@ -33,7 +33,6 @@ repositories {
 dependencies {
     implementation "net.neoforged:neoforge:${neo_version}"
     implementation "curse.maven:irons-spells-n-spellbooks-855414:8364935"
-    implementation "curse.maven:ui-933200:${uilib_file_id}"
     implementation "curse.maven:curios-309927:${curios_file_id}"
     testImplementation platform('org.junit:junit-bom:5.11.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'

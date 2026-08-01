@@ -32,7 +32,7 @@ public final class ScrollIconResolverSelfTest {
         }
         expect("iron_magic_duel", gradleProperties.getProperty("mod_id"));
         expect("Iron Magic Duel", gradleProperties.getProperty("mod_name"));
-        expect("1.0.44", gradleProperties.getProperty("mod_version"));
+        expect("1.0.45", gradleProperties.getProperty("mod_version"));
         expect("MKUXQQ", gradleProperties.getProperty("mod_authors"));
         expectNot("iron_spell_performance", gradleProperties.getProperty("mod_id"));
         expectNot("Iron Spellcasting Performance", gradleProperties.getProperty("mod_name"));
@@ -52,11 +52,11 @@ public final class ScrollIconResolverSelfTest {
         }
         if (!modsToml.contains("modId = \"iron_magic_duel\"")
                 || !modsToml.contains("displayName = \"Iron Magic Duel\"")
-                || !modsToml.contains("version = \"1.0.44\"")
+                || !modsToml.contains("version = \"1.0.45\"")
                 || !modsToml.contains("authors = \"MKUXQQ\"")
                 || !modsToml.contains("logoFile = \"icon.png\"")
-                || !modsToml.contains("modId = \"uilib\"")) {
-            throw new AssertionError("Expanded NeoForge metadata did not contain the renamed mod identity");
+                || modsToml.contains("modId = \"uilib\"")) {
+            throw new AssertionError("Expanded NeoForge metadata still contains the removed UILib dependency");
         }
         if (modsToml.contains("iron_spell_performance")
                 || modsToml.contains("Iron Spellcasting Performance")
@@ -99,7 +99,7 @@ public final class ScrollIconResolverSelfTest {
                 || !hud.contains("GREEN") || !hud.contains("entry.cooldowns()")
                 || !hud.contains("SPELL_BOX_WIDTH") || !hud.contains("drawHealthBox")
                 || !hud.contains("drawLocalPanelFrame")
-                || !hud.contains("0xFF42BCEB")
+                || !hud.contains("0xFF555555")
                 || hud.contains("UILIB_FRAME") || !hud.contains("0xFF33AA55")
                 || !hud.contains("hudWidth(int spellCount)") || !hud.contains("SPELL_COLUMNS = 6")
                 || !hud.contains("Float.isFinite(health)") || !hud.contains("renderLocalSpellHud")
