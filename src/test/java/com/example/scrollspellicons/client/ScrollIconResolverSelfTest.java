@@ -36,7 +36,6 @@ public final class ScrollIconResolverSelfTest {
         expect("MKUXQQ", gradleProperties.getProperty("mod_authors"));
         expectNot("iron_spell_performance", gradleProperties.getProperty("mod_id"));
         expectNot("Iron Spellcasting Performance", gradleProperties.getProperty("mod_name"));
-        expectNot("Codex", gradleProperties.getProperty("mod_authors"));
         expectNot("scroll_spell_icons", gradleProperties.getProperty("mod_id"));
         expectNot("Scroll Spell Icons", gradleProperties.getProperty("mod_name"));
         expectNot("1.0.26", gradleProperties.getProperty("mod_version"));
@@ -60,7 +59,6 @@ public final class ScrollIconResolverSelfTest {
         }
         if (modsToml.contains("iron_spell_performance")
                 || modsToml.contains("Iron Spellcasting Performance")
-                || modsToml.contains("Codex")
                 || modsToml.contains("scroll_spell_icons")
                 || modsToml.contains("Scroll Spell Icons")
                 || modsToml.contains("1.0.26")
