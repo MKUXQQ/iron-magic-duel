@@ -418,6 +418,10 @@ public final class SpellDuelManager {
         if (player != null && player.isAlive() && !player.isDeadOrDying() && player.getHealth() > 0) living.add(uuid);
     }
 
+    public Set<UUID> eliminatedPlayers(String groupId) {
+        return Set.copyOf(eliminatedPlayers.getOrDefault(groupId, Set.of()));
+    }
+
     /** Cancels an active duel immediately and keeps its A/B point configuration. */
     public boolean stop(String id) {
         SpellDuelGroup group = groups.get(id);
@@ -433,19 +437,29 @@ public final class SpellDuelManager {
     }
 
     /** Called from LivingDeathEvent, before Forge replaces a dead player entity. */
-    public void recordPlayerDeath(ServerPlayer player) {
+    public boolean recordPlayerDeath(ServerPlayer player) {
         UUID uuid = player.getUUID();
         for (SpellDuelGroup group : new ArrayList<>(groups.values())) {
             if (!group.active() || !group.contains(uuid)) continue;
-            eliminatedPlayers.computeIfAbsent(group.id(), ignored -> new LinkedHashSet<>()).add(uuid);
+            Set<UUID> eliminated = eliminatedPlayers.computeIfAbsent(group.id(), ignored -> new LinkedHashSet<>());
+            if (!eliminated.add(uuid)) return true;
+            player.stopUsingItem();
+            io.redspace.ironsspellbooks.api.magic.MagicData.getPlayerMagicData(player).resetCastingState();
+            player.setHealth(player.getMaxHealth());
+            player.deathTime = 0;
+            player.setInvulnerable(true);
+            player.setGameMode(GameType.SPECTATOR);
+            SpellDuelNetwork.broadcastEliminationSnapshot(this, group);
             Set<UUID> living = livingPlayers(group);
-            living.removeAll(eliminatedPlayers.getOrDefault(group.id(), Set.of()));
+            living.removeAll(eliminated);
             SpellDuelGroup.Team winner = group.winner(living);
             if (winner != null || group.isTeamEliminated(SpellDuelGroup.Team.A, living)
                     || group.isTeamEliminated(SpellDuelGroup.Team.B, living)) {
                 finish(group, winner, true);
             }
+            return true;
         }
+        return false;
     }
 
     private void finish(SpellDuelGroup group, SpellDuelGroup.Team winner) {
@@ -468,6 +482,7 @@ public final class SpellDuelManager {
             if (delayRestore) {
                 // Use an absolute server-tick deadline.  This cannot be skipped
                 // by countdown bookkeeping or by a player respawning early.
+                protectPendingRestore(states.keySet());
                 pendingRestores.put(group.id(), new PendingRestore(states, serverTicks + 100));
             } else {
                 for (UUID uuid : new ArrayList<>(states.keySet())) {
@@ -484,10 +499,22 @@ public final class SpellDuelManager {
         }
     }
 
+    private void protectPendingRestore(Set<UUID> players) {
+        for (UUID uuid : players) {
+            ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+            if (player == null) continue;
+            player.stopUsingItem();
+            player.setHealth(player.getMaxHealth());
+            player.deathTime = 0;
+            player.setInvulnerable(true);
+        }
+    }
+
     private Set<UUID> livingPlayers(SpellDuelGroup group) {
         Set<UUID> result = new LinkedHashSet<>();
         group.teamA().forEach(uuid -> addIfLiving(result, uuid));
         group.teamB().forEach(uuid -> addIfLiving(result, uuid));
+        result.removeAll(eliminatedPlayers.getOrDefault(group.id(), Set.of()));
         return result;
     }
 
@@ -634,9 +661,11 @@ public final class SpellDuelManager {
 
     private record PendingRestore(Map<UUID, SavedState> states, long restoreAtTick) { }
 
-    private record SavedState(ResourceKey<Level> dimension, Vec3 position, float yRot, float xRot, GameType gameType) {
+    private record SavedState(ResourceKey<Level> dimension, Vec3 position, float yRot, float xRot,
+                              GameType gameType, boolean invulnerable) {
         static SavedState capture(ServerPlayer player) {
-            return new SavedState(player.level().dimension(), player.position(), player.getYRot(), player.getXRot(), player.gameMode.getGameModeForPlayer());
+            return new SavedState(player.level().dimension(), player.position(), player.getYRot(), player.getXRot(),
+                    player.gameMode.getGameModeForPlayer(), player.isInvulnerable());
         }
 
         void restore(MinecraftServer server, UUID uuid) {
@@ -644,6 +673,9 @@ public final class SpellDuelManager {
             ServerLevel level = server.getLevel(dimension);
             if (player != null && level != null) {
                 player.setGameMode(gameType);
+                player.setInvulnerable(invulnerable);
+                player.setHealth(player.getMaxHealth());
+                player.deathTime = 0;
                 player.teleportTo(level, position.x(), position.y(), position.z(), yRot, xRot);
             }
         }

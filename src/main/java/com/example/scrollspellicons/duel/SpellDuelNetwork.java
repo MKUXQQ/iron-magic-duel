@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -125,6 +126,11 @@ public final class SpellDuelNetwork {
             for (ServerPlayer spectator : manager.spectators(group.id())) send(spectator, payload);
         }
     }
+    /** Sends the death frame before finish() clears the roster. */
+    public static void broadcastEliminationSnapshot(SpellDuelManager manager, SpellDuelGroup group) {
+        SnapshotPayload payload = new SnapshotPayload(group.id(), snapshotEntries(manager, group));
+        for (ServerPlayer spectator : manager.spectators(group.id())) send(spectator, payload);
+    }
 
     private static Map<String, Integer> cooldowns(MagicData magic) {
         Map<String, Integer> result = new LinkedHashMap<>();
@@ -136,11 +142,13 @@ public final class SpellDuelNetwork {
     }
     private static List<SnapshotEntry> snapshotEntries(SpellDuelManager manager, SpellDuelGroup group) {
         List<SnapshotEntry> result = new ArrayList<>();
-        group.teamA().forEach(id -> addSnapshot(result, manager.server(), id, 0));
-        group.teamB().forEach(id -> addSnapshot(result, manager.server(), id, 1));
+        Set<UUID> eliminated = manager.eliminatedPlayers(group.id());
+        group.teamA().forEach(id -> addSnapshot(result, manager.server(), id, 0, eliminated.contains(id)));
+        group.teamB().forEach(id -> addSnapshot(result, manager.server(), id, 1, eliminated.contains(id)));
         return result;
     }
-    private static void addSnapshot(List<SnapshotEntry> result, net.minecraft.server.MinecraftServer server, UUID id, int team) {
+    private static void addSnapshot(List<SnapshotEntry> result, net.minecraft.server.MinecraftServer server,
+                                    UUID id, int team, boolean eliminated) {
         ServerPlayer player = server.getPlayerList().getPlayer(id);
         if (player == null) return;
         MagicData magic = MagicData.getPlayerMagicData(player);
@@ -151,8 +159,9 @@ public final class SpellDuelNetwork {
         }));
         StringBuilder cooldowns = new StringBuilder();
         magic.getPlayerCooldowns().getSpellCooldowns().forEach((key, value) -> { if (value.getCooldownRemaining() > 0) cooldowns.append(key).append(':').append(value.getCooldownRemaining()).append(' '); });
-        String casting = magic.getCastingSpellId() == null ? "" : magic.getCastingSpellId();
-        result.add(new SnapshotEntry(team, player.getGameProfile().getName(), player.getHealth(), player.getMaxHealth(),
+        String casting = eliminated || magic.getCastingSpellId() == null ? "" : magic.getCastingSpellId();
+        float snapshotHealth = eliminated || !player.isAlive() || player.isDeadOrDying() ? 0.0F : Math.max(0.0F, player.getHealth());
+        result.add(new SnapshotEntry(team, player.getGameProfile().getName(), snapshotHealth, player.getMaxHealth(),
                 magic.getMana(), (float) player.getAttributeValue(AttributeRegistry.MAX_MANA.get()),
                 String.join(",", spells), casting, cooldowns.toString()));
     }

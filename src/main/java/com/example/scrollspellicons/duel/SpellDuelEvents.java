@@ -8,6 +8,7 @@ import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 import io.redspace.ironsspellbooks.api.events.SpellPreCastEvent;
 import io.redspace.ironsspellbooks.api.magic.MagicData;
 
@@ -52,10 +53,11 @@ public final class SpellDuelEvents {
         }
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onPlayerDeath(LivingDeathEvent event) {
-        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
-            manager(player.getServer()).recordPlayerDeath(player);
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player
+                && manager(player.getServer()).recordPlayerDeath(player)) {
+            event.setCanceled(true);
         }
     }
 
