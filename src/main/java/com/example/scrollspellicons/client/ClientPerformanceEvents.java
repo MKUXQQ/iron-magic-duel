@@ -1,11 +1,10 @@
 package com.example.scrollspellicons.client;
 
 import com.example.scrollspellicons.config.PerformanceConfig;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.RenderFrameEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.TickEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
@@ -16,7 +15,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
-@EventBusSubscriber(modid = "iron_magic_duel", value = Dist.CLIENT, bus = EventBusSubscriber.Bus.GAME)
+@EventBusSubscriber(modid = "iron_magic_duel", value = Dist.CLIENT, bus = EventBusSubscriber.Bus.FORGE)
 public final class ClientPerformanceEvents {
     private static volatile ParticleBudget particleBudget = new ParticleBudget(1.0, 4096);
     private static final Map<Integer, PositionSmoother.Position> SMOOTHED_PROJECTILES = new HashMap<>();
@@ -25,7 +24,7 @@ public final class ClientPerformanceEvents {
     }
 
     @SubscribeEvent
-    public static void onFrame(RenderFrameEvent.Pre event) {
+    public static void onFrame(TickEvent.RenderTickEvent event) {
         if (!PerformanceConfig.CLIENT.enableClientOptimizations.get()) {
             return;
         }
@@ -39,7 +38,7 @@ public final class ClientPerformanceEvents {
     }
 
     @SubscribeEvent
-    public static void onClientTick(ClientTickEvent.Post event) {
+    public static void onClientTick(TickEvent.ClientTickEvent event) {
         if (PerformanceConfig.CLIENT.enableClientOptimizations.get()) {
             particleBudget.beginFrame(ClientPerformanceState.frameId());
             updateSpellProjectileTargets();

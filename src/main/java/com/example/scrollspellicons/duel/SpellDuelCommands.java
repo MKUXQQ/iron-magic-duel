@@ -7,9 +7,9 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.RegisterCommandsEvent;
 
 @EventBusSubscriber(modid = "iron_magic_duel")
 public final class SpellDuelCommands {
@@ -24,16 +24,16 @@ public final class SpellDuelCommands {
                                 .suggests((context, builder) -> SharedSuggestionProvider.suggest(
                                         SpellDuelEvents.manager(context.getSource().getServer()).groups().keySet(), builder))
                                 .executes(context -> startOne(context.getSource(), StringArgumentType.getString(context, "group")))))
+                .then(Commands.literal("stop").requires(source -> source.hasPermission(2))
+                        .then(Commands.literal("all").executes(context -> stopAll(context.getSource())))
+                        .then(Commands.argument("group", StringArgumentType.word())
+                                .suggests((context, builder) -> SharedSuggestionProvider.suggest(
+                                        SpellDuelEvents.manager(context.getSource().getServer()).groups().keySet(), builder))
+                                .executes(context -> stopOne(context.getSource(), StringArgumentType.getString(context, "group")))))
                 .then(Commands.literal("tool").requires(source -> source.hasPermission(2))
                         .executes(context -> giveTools(context.getSource())))
-                .then(Commands.literal("point").requires(source -> source.hasPermission(2))
-                        .then(groupArgument().then(Commands.literal("a").executes(context -> setPoint(context.getSource(), SpellDuelGroup.Team.A, StringArgumentType.getString(context, "groupId"))))
-                                .then(Commands.literal("b").executes(context -> setPoint(context.getSource(), SpellDuelGroup.Team.B, StringArgumentType.getString(context, "groupId"))))))
                 .then(Commands.literal("shop").requires(source -> source.hasPermission(2))
                         .executes(context -> giveShop(context.getSource())))
-                .then(Commands.literal("display").requires(source -> source.hasPermission(2))
-                        .then(Commands.literal("on").executes(context -> display(context.getSource(), true)))
-                        .then(Commands.literal("off").executes(context -> display(context.getSource(), false))))
                 .then(Commands.literal("hud")
                         .then(Commands.argument("x", IntegerArgumentType.integer(0, 10000))
                                 .then(Commands.argument("y", IntegerArgumentType.integer(0, 10000))
@@ -74,6 +74,19 @@ public final class SpellDuelCommands {
     private static int startOne(CommandSourceStack source, String id) {
         source.sendSuccess(() -> Component.literal("[法术决斗] " + SpellDuelEvents.manager(source.getServer()).start(id)), true);
         return 1;
+    }
+
+    private static int stopAll(CommandSourceStack source) {
+        int stopped = SpellDuelEvents.manager(source.getServer()).stopAll();
+        source.sendSuccess(() -> Component.literal("[法术决斗] 已取消 " + stopped + " 个进行中的决斗"), true);
+        return stopped;
+    }
+
+    private static int stopOne(CommandSourceStack source, String id) {
+        boolean stopped = SpellDuelEvents.manager(source.getServer()).stop(id);
+        if (stopped) source.sendSuccess(() -> Component.literal("[法术决斗] 已取消决斗 " + id), true);
+        else source.sendFailure(Component.literal("[法术决斗] 决斗组不存在或未在进行中：" + id));
+        return stopped ? 1 : 0;
     }
 
     private static int spectate(CommandSourceStack source, String id) throws com.mojang.brigadier.exceptions.CommandSyntaxException {

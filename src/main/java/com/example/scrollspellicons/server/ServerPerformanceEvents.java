@@ -1,17 +1,17 @@
 package com.example.scrollspellicons.server;
 
 import com.example.scrollspellicons.config.PerformanceConfig;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.server.ServerStartedEvent;
-import net.neoforged.neoforge.event.server.ServerStoppingEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.event.TickEvent;
 
 import java.util.concurrent.Future;
 
 import static com.example.scrollspellicons.IronSpellPerformance.LOGGER;
 
-@EventBusSubscriber(modid = "iron_magic_duel", bus = EventBusSubscriber.Bus.GAME)
+@EventBusSubscriber(modid = "iron_magic_duel", bus = EventBusSubscriber.Bus.FORGE)
 public final class ServerPerformanceEvents {
     private static final SpellWorkBudget WORK_BUDGET = new SpellWorkBudget();
     private static final SpellMetadataCache METADATA_CACHE = new SpellMetadataCache();
@@ -42,7 +42,7 @@ public final class ServerPerformanceEvents {
     }
 
     @SubscribeEvent
-    public static void onServerTick(ServerTickEvent.Pre event) {
+    public static void onServerTick(TickEvent.ServerTickEvent event) {
         tick++;
         long millis = PerformanceConfig.SERVER.maxSpellScanMillisPerTick.get();
         WORK_BUDGET.beginTick(tick, millis == 0 ? 0 : millis * 1_000_000L);

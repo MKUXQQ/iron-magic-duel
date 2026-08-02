@@ -1,9 +1,9 @@
 package com.example.scrollspellicons;
 
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.config.ModConfig;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.ModLoadingContext;
 import com.example.scrollspellicons.config.PerformanceConfig;
 import com.example.scrollspellicons.duel.SpellDuelItems;
 import com.example.scrollspellicons.duel.SpellDuelNetwork;
@@ -15,12 +15,13 @@ public final class IronSpellPerformance {
     public static final String MOD_ID = "iron_magic_duel";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    public IronSpellPerformance(IEventBus modEventBus, ModContainer modContainer) {
+    public IronSpellPerformance() {
+        var modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         SpellDuelItems.ITEMS.register(modEventBus);
         SpellDuelItems.TABS.register(modEventBus);
         modEventBus.addListener(SpellDuelItems::addToCreativeTab);
-        modEventBus.addListener(SpellDuelNetwork::register);
-        modContainer.registerConfig(ModConfig.Type.CLIENT, PerformanceConfig.CLIENT_SPEC);
-        modContainer.registerConfig(ModConfig.Type.SERVER, PerformanceConfig.SERVER_SPEC);
+        SpellDuelNetwork.register();
+        ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, PerformanceConfig.CLIENT_SPEC);
+        ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, PerformanceConfig.SERVER_SPEC);
     }
 }

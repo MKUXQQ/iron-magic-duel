@@ -16,6 +16,7 @@ import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.core.particles.ParticleTypes;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -35,11 +36,15 @@ public final class SpellDuelManager {
     private final Map<UUID, PendingSelection> pending = new HashMap<>();
     private final Map<String, Map<UUID, SavedState>> savedStates = new HashMap<>();
     private final Map<String, PendingRestore> pendingRestores = new HashMap<>();
+    /** Players eliminated by a death event.  Kept separately because Forge can
+     * respawn a player before the next server tick observes a dead entity. */
+    private final Map<String, Set<UUID>> eliminatedPlayers = new HashMap<>();
     private final Map<GlobalPos, String> catalystGroups = new LinkedHashMap<>();
     private final Set<UUID> spectators = new LinkedHashSet<>();
     private static final String SELECTION_GLOW_TEAM = "iron_magic_glow";
     private final Map<UUID, String> previousTeams = new HashMap<>();
-    private boolean displayEnabled;
+    private boolean displayEnabled = true;
+    private long serverTicks;
     private final java.nio.file.Path pointFile;
 
     public SpellDuelManager(MinecraftServer server) {
@@ -58,18 +63,27 @@ public final class SpellDuelManager {
         return pending.computeIfAbsent(player, ignored -> new PendingSelection());
     }
 
-    /** Starts a fresh, private editing group every time the picker is opened. */
+    /** Starts a new persistent duel group every time the picker is opened. */
     public String beginEditingGroup(UUID creator) {
-        cancelEditingGroup(creator);
         PendingSelection state = selection(creator);
-        SpellDuelGroup reusable = groups.values().stream()
-                .filter(group -> !group.active() && group.teamA().isEmpty() && group.teamB().isEmpty())
-                .sorted(java.util.Comparator.comparingInt(group -> groupOrder(group.id())))
-                .findFirst().orElse(null);
-        String id = reusable == null ? nextGroupId() : reusable.id();
-        if (reusable == null) groups.put(id, new SpellDuelGroup(id));
+        if (state.currentGroup != null) editingGroups.remove(state.currentGroup);
+        SpellDuelGroup readyForPlayers = groups.values().stream()
+                .filter(group -> !group.active() && group.teamA().isEmpty() && group.teamB().isEmpty()
+                        && group.pointA() != null && group.pointB() != null && !editingGroups.contains(group.id()))
+                .min(java.util.Comparator.comparingInt(group -> groupOrder(group.id())))
+                .orElse(null);
+        if (readyForPlayers != null) {
+            editingGroups.add(readyForPlayers.id());
+            state.currentGroup = readyForPlayers.id();
+            return readyForPlayers.id();
+        }
+        String id = nextGroupId();
+        groups.put(id, new SpellDuelGroup(id));
         editingGroups.add(id);
         state.currentGroup = id;
+        state.pointA = null;
+        state.pointB = null;
+        savePoints();
         return id;
     }
 
@@ -78,7 +92,13 @@ public final class SpellDuelManager {
         SpellDuelGroup group = groups.get(state.currentGroup);
         if (group == null || !editingGroups.contains(group.id()) || group.active()) return false;
         String selectedGroup = selectedGroup(target);
-        if (selectedGroup != null && !selectedGroup.equals(group.id())) return false;
+        if (selectedGroup != null && !selectedGroup.equals(group.id())) {
+            SpellDuelGroup previous = groups.get(selectedGroup);
+            if (previous == null) return false;
+            if (previous.active()) finish(previous, null, false);
+            previous.add(target, null);
+            clearSelectionGlow(Set.of(target));
+        }
         group.add(target, team);
         ServerPlayer player = server.getPlayerList().getPlayer(target);
         if (player != null) setSelectionGlow(player);
@@ -103,20 +123,14 @@ public final class SpellDuelManager {
         return true;
     }
 
-    /** Esc cancels the current edit: remove its temporary group and every selected player. */
+    /** Esc cancels selection only; the persistent duel group and its points stay saved. */
     public boolean cancelEditingGroup(UUID creator) {
         PendingSelection state = pending.get(creator);
         if (state == null || state.currentGroup == null || !editingGroups.remove(state.currentGroup)) return false;
         SpellDuelGroup group = groups.get(state.currentGroup);
         if (group != null) {
             clearSelectionGlow(groupPlayers(group));
-            // An editor can reuse a group that already owns saved A/B points.
-            // Esc must cancel its players but must never destroy those point settings.
-            if (group.pointA() != null || group.pointB() != null) group.clearPlayers();
-            else {
-                groups.remove(state.currentGroup);
-                catalystGroups.entrySet().removeIf(entry -> state.currentGroup.equals(entry.getValue()));
-            }
+            group.clearPlayers();
         }
         state.currentGroup = null;
         state.pointA = null;
@@ -162,39 +176,26 @@ public final class SpellDuelManager {
     public String createPointGroup(UUID creator) {
         PendingSelection state = selection(creator);
         if (state.pointA == null || state.pointB == null) return null;
-        SpellDuelGroup existing = state.currentGroup == null ? null : groups.get(state.currentGroup);
-        if (existing != null && !existing.active()) {
-            existing.setPoint(SpellDuelGroup.Team.A, state.pointA);
-            existing.setPoint(SpellDuelGroup.Team.B, state.pointB);
-            state.pointA = null;
-            state.pointB = null;
-            savePoints();
-            return existing.id();
-        }
-        if (existing == null || existing.active()) {
-            existing = groups.values().stream()
-                    .filter(group -> !group.active() && (group.pointA() == null || group.pointB() == null)
-                            && !group.teamA().isEmpty() && !group.teamB().isEmpty())
-                    .findFirst().orElse(null);
-        }
-        if (existing != null && !existing.active() && (existing.pointA() == null || existing.pointB() == null)) {
-            existing.setPoint(SpellDuelGroup.Team.A, state.pointA);
-            existing.setPoint(SpellDuelGroup.Team.B, state.pointB);
-            state.pointA = null;
-            state.pointB = null;
-            state.currentGroup = existing.id();
-            return existing.id();
-        }
         String id = nextGroupId();
         SpellDuelGroup group = new SpellDuelGroup(id);
         group.setPoint(SpellDuelGroup.Team.A, state.pointA);
         group.setPoint(SpellDuelGroup.Team.B, state.pointB);
         groups.put(id, group);
         savePoints();
-        state.currentGroup = id;
+        state.currentGroup = null;
         state.pointA = null;
         state.pointB = null;
-        return id;
+        return group.id();
+    }
+
+    private SpellDuelGroup currentOrNewGroup(PendingSelection state) {
+        SpellDuelGroup group = state.currentGroup == null ? null : groups.get(state.currentGroup);
+        if (group != null) return group;
+        String id = nextGroupId();
+        group = new SpellDuelGroup(id);
+        groups.put(id, group);
+        state.currentGroup = id;
+        return group;
     }
 
     private void setSelectionGlow(ServerPlayer player) {
@@ -234,6 +235,24 @@ public final class SpellDuelManager {
                 level.dimension().location().toString(), pos.getX() + .5, pos.getY() + 1, pos.getZ() + .5, 0, 0);
         if (team == SpellDuelGroup.Team.A) state.pointA = point;
         else state.pointB = point;
+    }
+
+    /** Sends point particles only to a player currently holding the point selector. */
+    public void showPointMarkers(ServerPlayer player) {
+        java.util.List<SpellDuelNetwork.PointMarker> labels = new ArrayList<>();
+        for (SpellDuelGroup group : groups.values()) {
+            sendPointMarker(player, labels, group.id(), "A", group.pointA(), ParticleTypes.END_ROD);
+            sendPointMarker(player, labels, group.id(), "B", group.pointB(), ParticleTypes.SMOKE);
+        }
+        SpellDuelNetwork.sendPointMarkers(player, labels);
+    }
+
+    private void sendPointMarker(ServerPlayer player, java.util.List<SpellDuelNetwork.PointMarker> labels, String groupId, String pointName, SpellDuelGroup.PointLocation point,
+                                 net.minecraft.core.particles.ParticleOptions particle) {
+        if (point == null || !player.level().dimension().location().toString().equals(point.dimension())) return;
+        ServerLevel level = player.serverLevel();
+        level.sendParticles(player, particle, true, point.x(), point.y() + 0.25, point.z(), 5, 0.16, 0.20, 0.16, 0.01);
+        labels.add(new SpellDuelNetwork.PointMarker(groupId + " · " + pointName, point.x(), point.y() + 0.85, point.z()));
     }
 
     public boolean setPointFromCommand(String id, SpellDuelGroup.Team team, ServerPlayer player) {
@@ -290,7 +309,7 @@ public final class SpellDuelManager {
         if (editingGroups.contains(id)) return "决斗组 " + id + " 仍在编辑中，请先点击创建对战";
         if (group.active()) return "决斗组 " + id + " 已经在进行中";
         if (pendingRestores.containsKey(id)) return "决斗组 " + id + " 正在等待返回，剩余 "
-                + Math.max(1, (pendingRestores.get(id).ticks() + 19) / 20) + " 秒";
+                + Math.max(1, (pendingRestores.get(id).restoreAtTick() - serverTicks + 19) / 20) + " 秒";
         if (group.teamA().isEmpty()) return id + " 缺少 A 队玩家";
         if (group.teamB().isEmpty()) return id + " 缺少 B 队玩家";
         if (group.pointA() == null) return id + " 缺少 A 点位";
@@ -373,14 +392,13 @@ public final class SpellDuelManager {
     }
 
     public void tick() {
+        serverTicks++;
         for (var iterator = pendingRestores.entrySet().iterator(); iterator.hasNext();) {
             var entry = iterator.next();
-            PendingRestore restore = entry.getValue().tick();
-            if (restore.ticks() <= 0) {
+            PendingRestore restore = entry.getValue();
+            if (serverTicks >= restore.restoreAtTick()) {
                 restore.states().forEach((uuid, state) -> state.restore(server, uuid));
                 iterator.remove();
-            } else {
-                entry.setValue(restore);
             }
         }
         for (SpellDuelGroup group : new ArrayList<>(groups.values())) {
@@ -398,6 +416,36 @@ public final class SpellDuelManager {
         if (player != null && player.isAlive() && !player.isDeadOrDying() && player.getHealth() > 0) living.add(uuid);
     }
 
+    /** Cancels an active duel immediately and keeps its A/B point configuration. */
+    public boolean stop(String id) {
+        SpellDuelGroup group = groups.get(id);
+        if (group == null || !group.active()) return false;
+        finish(group, null, false);
+        return true;
+    }
+
+    public int stopAll() {
+        int stopped = 0;
+        for (String id : new ArrayList<>(groups.keySet())) if (stop(id)) stopped++;
+        return stopped;
+    }
+
+    /** Called from LivingDeathEvent, before Forge replaces a dead player entity. */
+    public void recordPlayerDeath(ServerPlayer player) {
+        UUID uuid = player.getUUID();
+        for (SpellDuelGroup group : new ArrayList<>(groups.values())) {
+            if (!group.active() || !group.contains(uuid)) continue;
+            eliminatedPlayers.computeIfAbsent(group.id(), ignored -> new LinkedHashSet<>()).add(uuid);
+            Set<UUID> living = livingPlayers(group);
+            living.removeAll(eliminatedPlayers.getOrDefault(group.id(), Set.of()));
+            SpellDuelGroup.Team winner = group.winner(living);
+            if (winner != null || group.isTeamEliminated(SpellDuelGroup.Team.A, living)
+                    || group.isTeamEliminated(SpellDuelGroup.Team.B, living)) {
+                finish(group, winner, true);
+            }
+        }
+    }
+
     private void finish(SpellDuelGroup group, SpellDuelGroup.Team winner) {
         finish(group, winner, false);
     }
@@ -412,10 +460,13 @@ public final class SpellDuelManager {
         // Keep the saved A/B points, but clear the finished duel roster so the
         // same group can be configured and used again immediately.
         group.clearPlayers();
+        eliminatedPlayers.remove(group.id());
         Map<UUID, SavedState> states = savedStates.remove(group.id());
         if (states != null) {
             if (delayRestore) {
-                pendingRestores.put(group.id(), new PendingRestore(states, 100));
+                // Use an absolute server-tick deadline.  This cannot be skipped
+                // by countdown bookkeeping or by a player respawning early.
+                pendingRestores.put(group.id(), new PendingRestore(states, serverTicks + 100));
             } else {
                 for (UUID uuid : new ArrayList<>(states.keySet())) {
                     SavedState saved = states.get(uuid);
@@ -443,7 +494,7 @@ public final class SpellDuelManager {
         try {
             CompoundTag root;
             try (var input = java.nio.file.Files.newInputStream(pointFile)) {
-                root = NbtIo.readCompressed(input, net.minecraft.nbt.NbtAccounter.unlimitedHeap());
+                root = NbtIo.readCompressed(input);
             }
             CompoundTag groupsTag = root.getCompound("groups");
             for (String id : groupsTag.getAllKeys()) {
@@ -463,7 +514,7 @@ public final class SpellDuelManager {
             groups.forEach((id, group) -> { CompoundTag data = new CompoundTag();
                 if (group.pointA() != null) data.put("a", writePoint(group.pointA()));
                 if (group.pointB() != null) data.put("b", writePoint(group.pointB())); groupsTag.put(id, data); });
-            root.put("groups", groupsTag); NbtIo.writeCompressed(root, pointFile);
+            root.put("groups", groupsTag); NbtIo.writeCompressed(root, pointFile.toFile());
         } catch (Exception ignored) { }
     }
 
@@ -561,6 +612,8 @@ public final class SpellDuelManager {
         }
         pending.clear();
         editingGroups.clear();
+        eliminatedPlayers.clear();
+        savePoints();
         return cleared;
     }
 
@@ -577,9 +630,7 @@ public final class SpellDuelManager {
         private String currentGroup;
     }
 
-    private record PendingRestore(Map<UUID, SavedState> states, int ticks) {
-        PendingRestore tick() { return new PendingRestore(states, ticks - 1); }
-    }
+    private record PendingRestore(Map<UUID, SavedState> states, long restoreAtTick) { }
 
     private record SavedState(ResourceKey<Level> dimension, Vec3 position, float yRot, float xRot, GameType gameType) {
         static SavedState capture(ServerPlayer player) {

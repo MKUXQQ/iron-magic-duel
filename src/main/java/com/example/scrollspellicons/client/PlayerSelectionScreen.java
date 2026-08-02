@@ -44,7 +44,7 @@ public final class PlayerSelectionScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics, mouseX, mouseY, partialTick);
+        renderBackground(graphics);
         int panelWidth = panelWidth();
         int panelHeight = panelHeight();
         int left = (width - panelWidth) / 2;
@@ -95,7 +95,7 @@ public final class PlayerSelectionScreen extends Screen {
     private void drawFace(GuiGraphics graphics, java.util.UUID id, int x, int y) {
         PlayerInfo info = Minecraft.getInstance().getConnection() == null ? null
                 : Minecraft.getInstance().getConnection().getPlayerInfo(id);
-        ResourceLocation skin = info == null ? ResourceLocation.withDefaultNamespace("textures/entity/player/wide/alex.png") : info.getSkin().texture();
+        ResourceLocation skin = info == null ? new ResourceLocation("minecraft", "textures/entity/player/wide/alex.png") : info.getSkinLocation();
         graphics.blit(skin, x, y, 20, 20, 8, 8, 8, 8, 64, 64);
         graphics.blit(skin, x, y, 20, 20, 40, 8, 8, 8, 64, 64);
     }
@@ -108,7 +108,7 @@ public final class PlayerSelectionScreen extends Screen {
         int top = (height - panelHeight) / 2;
         int buttonTop = top + panelHeight - 35;
         if (mouseX >= left + 12 && mouseX < left + panelWidth - 12 && mouseY >= buttonTop && mouseY < buttonTop + 24) {
-            Minecraft.getInstance().getConnection().send(new SpellDuelNetwork.CreateSelectionPayload());
+            SpellDuelNetwork.sendToServer(new SpellDuelNetwork.CreateSelectionPayload());
             return true;
         }
         int listTop = top + 42;
@@ -125,9 +125,12 @@ public final class PlayerSelectionScreen extends Screen {
                     // While a custom screen is open the server-side crouching flag can be
                     // one tick behind. Read the actual Shift key so sneak-left is reliable.
                     boolean crouching = Minecraft.getInstance().options.keyShift.isDown();
-                    boolean alreadySelected = !players.get(index).selectedGroup().isEmpty();
-                    Minecraft.getInstance().getConnection().send(new SpellDuelNetwork.SelectPlayerPayload(
-                            players.get(index).id(), (byte) (button == 0 && (crouching || alreadySelected) ? 2 : button == 0 ? 0 : 1)));
+                    // Clicking a player in this editing group removes them. A
+                    // player selected by a different non-active group is instead
+                    // reassigned by the server in one click.
+                    boolean selectedInThisGroup = players.get(index).ownTeam() >= 0;
+                    SpellDuelNetwork.sendToServer(new SpellDuelNetwork.SelectPlayerPayload(
+                            players.get(index).id(), (byte) (button == 0 && (crouching || selectedInThisGroup) ? 2 : button == 0 ? 0 : 1)));
                     return true;
                 }
             }
@@ -136,7 +139,7 @@ public final class PlayerSelectionScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
         int columns = columns();
         int max = Math.max(0, players.size() - visibleRows() * columns);
         scroll = Math.max(0, Math.min(max, scroll - (int) Math.signum(scrollY) * columns));
@@ -144,12 +147,11 @@ public final class PlayerSelectionScreen extends Screen {
     }
 
     @Override public boolean isPauseScreen() { return false; }
-    @Override protected void renderBlurredBackground(float partialTick) { }
 
     @Override
     public void onClose() {
         if (Minecraft.getInstance().getConnection() != null) {
-            Minecraft.getInstance().getConnection().send(new SpellDuelNetwork.CancelSelectionPayload());
+            SpellDuelNetwork.sendToServer(new SpellDuelNetwork.CancelSelectionPayload());
         }
         current = null;
         super.onClose();

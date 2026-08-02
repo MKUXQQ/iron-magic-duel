@@ -4,10 +4,11 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.entity.player.AttackEntityEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.entity.player.AttackEntityEvent;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.event.TickEvent;
 
 /** Item interactions for the player and point selectors. */
 @EventBusSubscriber(modid = "iron_magic_duel")
@@ -70,7 +71,16 @@ public final class SpellDuelSelectionEvents {
         event.setCanceled(true);
     }
 
-    private static boolean is(ItemStack stack, net.neoforged.neoforge.registries.DeferredItem<?> item) {
+    @SubscribeEvent
+    public static void showPointMarkers(TickEvent.PlayerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)) return;
+        if (player.tickCount % 5 != 0) return;
+        if (!is(player.getMainHandItem(), SpellDuelItems.POINT_SELECTOR)
+                && !is(player.getOffhandItem(), SpellDuelItems.POINT_SELECTOR)) return;
+        SpellDuelEvents.manager(player.getServer()).showPointMarkers(player);
+    }
+
+    private static boolean is(ItemStack stack, net.minecraftforge.registries.RegistryObject<? extends net.minecraft.world.item.Item> item) {
         return stack.is(item.get());
     }
 }

@@ -1,12 +1,13 @@
 package com.example.scrollspellicons.duel;
 
 import net.minecraft.server.MinecraftServer;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.server.ServerStartedEvent;
-import net.neoforged.neoforge.event.server.ServerStoppingEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
 
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -33,7 +34,8 @@ public final class SpellDuelEvents {
     }
 
     @SubscribeEvent
-    public static void onServerTick(ServerTickEvent.Post event) {
+    public static void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
         SpellDuelManager manager = manager(event.getServer());
         manager.tick();
         SpellDuelNetwork.broadcastSnapshots(manager);
@@ -45,6 +47,13 @@ public final class SpellDuelEvents {
         if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
             SpellDuelManager manager = manager(player.getServer());
             SpellDuelNetwork.sendDisplay(player, manager.displayEnabled());
+        }
+    }
+
+    @SubscribeEvent
+    public static void onPlayerDeath(LivingDeathEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            manager(player.getServer()).recordPlayerDeath(player);
         }
     }
 }

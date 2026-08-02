@@ -1,10 +1,10 @@
 package com.example.scrollspellicons.server;
 
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.entity.living.LivingDamageEvent;
+import net.minecraftforge.event.TickEvent;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -19,15 +19,15 @@ public final class DuelRegenerationEvents {
     private DuelRegenerationEvents() {}
 
     @SubscribeEvent
-    public static void onDamage(LivingDamageEvent.Post event) {
+    public static void onDamage(LivingDamageEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             DAMAGE.put(player.getUUID(), new DamageState(player.getServer().getTickCount(), player.getHealth()));
         }
     }
 
     @SubscribeEvent
-    public static void onPlayerTick(PlayerTickEvent.Post event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+    public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (!(event.player instanceof ServerPlayer player)) return;
         player.getFoodData().setFoodLevel(20);
         player.getFoodData().setSaturation(20.0F);
         DamageState state = DAMAGE.get(player.getUUID());

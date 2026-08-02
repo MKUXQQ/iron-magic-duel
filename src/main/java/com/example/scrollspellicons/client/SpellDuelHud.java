@@ -11,16 +11,13 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.minecraft.client.player.AbstractClientPlayer;
-import net.minecraft.client.renderer.texture.TextureAtlas;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.client.event.RenderGuiEvent;
 import top.theillusivec4.curios.api.CuriosApi;
 import org.joml.Quaternionf;
 import org.joml.Vector4f;
@@ -48,13 +45,14 @@ public final class SpellDuelHud {
     public static void onHud(RenderGuiEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return;
-        if (mc.player.isSpectator()) {
-            renderSpectatorSnapshot(event.getGuiGraphics(), mc);
-            return;
-        }
-        renderLocalSpellHud(event.getGuiGraphics(), mc);
-        if (!SpellDuelClientState.displayEnabled()) return;
-        for (Player player : mc.level.players()) if (player.isAlive()) renderPlayerSpellBar(event.getGuiGraphics(), mc, player);
+        // F3 is Minecraft's diagnostic view.  Do not place any duel overlays on
+        // top of it: the extra spell icons made the debug screen misleading.
+        if (mc.options.renderDebug) return;
+        // Duel information is spectator-only.  Normal players retain the
+        // vanilla health/food HUD and never receive projected player panels or
+        // spell icons above other players.
+        if (!mc.player.isSpectator()) return;
+        renderSpectatorSnapshot(event.getGuiGraphics(), mc);
     }
 
     private static void renderPlayerSpellBar(GuiGraphics graphics, Minecraft mc, Player player) {
@@ -96,7 +94,7 @@ public final class SpellDuelHud {
         drawSpellBox(graphics, mc, spells, contentX, spellY, hudWidth, spellHeight);
         drawHealthBox(graphics, mc, contentX, healthY, hudWidth, mc.player.getHealth(), mc.player.getMaxHealth());
         drawManaBox(graphics, mc, contentX, manaY, hudWidth, ClientMagicData.getPlayerMana(),
-                (float) mc.player.getAttributeValue(AttributeRegistry.MAX_MANA));
+                (float) mc.player.getAttributeValue(AttributeRegistry.MAX_MANA.get()));
     }
 
     private static int hudX(GuiGraphics graphics, int panelWidth) {
@@ -117,9 +115,8 @@ public final class SpellDuelHud {
 
     private static void renderLocalPlayerFace(GuiGraphics graphics, Minecraft mc, int x, int y) {
         drawFrame(graphics, x, y, PLAYER_FACE_SIZE, PLAYER_FACE_SIZE);
-        if (mc.player instanceof AbstractClientPlayer clientPlayer) {
-            PlayerFaceRenderer.draw(graphics, clientPlayer.getSkin(), x + 4, y + 4, 16);
-        }
+        AbstractClientPlayer clientPlayer = mc.player;
+        PlayerFaceRenderer.draw(graphics, clientPlayer.getSkinTextureLocation(), x + 4, y + 4, 16);
     }
 
     private static void renderSpectatorSnapshot(GuiGraphics graphics, Minecraft mc) {
@@ -151,7 +148,7 @@ public final class SpellDuelHud {
                 .filter(player -> player.getName().getString().equals(entry.name()))
                 .findFirst().orElse(null);
         if (found instanceof AbstractClientPlayer clientPlayer) {
-            PlayerFaceRenderer.draw(graphics, clientPlayer.getSkin(), x, y, 24);
+            PlayerFaceRenderer.draw(graphics, clientPlayer.getSkinTextureLocation(), x, y, 24);
         }
         int textX = x + 30;
         graphics.drawString(mc.font, entry.name(), textX, y + 2,
@@ -246,17 +243,16 @@ public final class SpellDuelHud {
 
     private static void renderSpellIcon(GuiGraphics graphics, Minecraft mc, SpellVisual visual, int x, int y) {
         ResourceLocation icon = ScrollIconResolver.iconFor(visual.id()).orElse(null);
-        if (icon == null) return;
-        ResourceLocation spriteId = ResourceLocation.fromNamespaceAndPath(icon.getNamespace(),
-                icon.getPath().substring("textures/".length(), icon.getPath().length() - ".png".length()));
-        TextureAtlasSprite sprite = mc.getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(spriteId);
-        if (sprite.contents().name().equals(MissingTextureAtlasSprite.getLocation())) {
+        if (icon == null) {
             graphics.fill(x, y, x + 16, y + 16, 0xFF111111);
             graphics.fill(x + 2, y + 2, x + 14, y + 14, 0xFF555555);
             drawCooldownNumber(graphics, mc, x, y, visual.cooldownTicks());
             return;
         }
-        graphics.blit(x, y, 0, 16, 16, sprite);
+        // Iron's spellbook GUI uses these 16x16 images directly.  They are not
+        // item/block-atlas sprites, so looking them up in LOCATION_BLOCKS turns
+        // them into missing-texture squares.  Bind and draw the original image.
+        graphics.blit(icon, x, y, 0, 0, 16, 16, 16, 16);
         drawCooldownNumber(graphics, mc, x, y, visual.cooldownTicks());
     }
 

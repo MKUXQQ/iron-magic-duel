@@ -1,21 +1,21 @@
 package com.example.scrollspellicons.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.List;
 
 public final class PerformanceConfig {
     public static final Client CLIENT;
-    public static final ModConfigSpec CLIENT_SPEC;
+    public static final ForgeConfigSpec CLIENT_SPEC;
     public static final Server SERVER;
-    public static final ModConfigSpec SERVER_SPEC;
+    public static final ForgeConfigSpec SERVER_SPEC;
 
     static {
-        Pair<Client, ModConfigSpec> client = new ModConfigSpec.Builder().configure(Client::new);
+        Pair<Client, ForgeConfigSpec> client = new ForgeConfigSpec.Builder().configure(Client::new);
         CLIENT = client.getLeft();
         CLIENT_SPEC = client.getRight();
-        Pair<Server, ModConfigSpec> server = new ModConfigSpec.Builder().configure(Server::new);
+        Pair<Server, ForgeConfigSpec> server = new ForgeConfigSpec.Builder().configure(Server::new);
         SERVER = server.getLeft();
         SERVER_SPEC = server.getRight();
     }
@@ -24,14 +24,14 @@ public final class PerformanceConfig {
     }
 
     public static final class Client {
-        public final ModConfigSpec.BooleanValue enableClientOptimizations;
-        public final ModConfigSpec.DoubleValue particleDistanceMultiplier;
-        public final ModConfigSpec.IntValue maxParticlesPerFrame;
-        public final ModConfigSpec.BooleanValue preloadSpellResources;
-        public final ModConfigSpec.IntValue projectileRenderDistance;
-        public final ModConfigSpec.IntValue maxVisibleSpellProjectiles;
+        public final ForgeConfigSpec.BooleanValue enableClientOptimizations;
+        public final ForgeConfigSpec.DoubleValue particleDistanceMultiplier;
+        public final ForgeConfigSpec.IntValue maxParticlesPerFrame;
+        public final ForgeConfigSpec.BooleanValue preloadSpellResources;
+        public final ForgeConfigSpec.IntValue projectileRenderDistance;
+        public final ForgeConfigSpec.IntValue maxVisibleSpellProjectiles;
 
-        private Client(ModConfigSpec.Builder builder) {
+        private Client(ForgeConfigSpec.Builder builder) {
             builder.comment("Iron Magic Duel - client settings").push("client");
             enableClientOptimizations = builder.comment("Enable client-side spell rendering/resource optimizations.")
                     .define("enableClientOptimizations", true);
@@ -50,13 +50,13 @@ public final class PerformanceConfig {
     }
 
     public static final class Server {
-        public final ModConfigSpec.BooleanValue enableServerOptimizations;
-        public final ModConfigSpec.LongValue maxSpellScanMillisPerTick;
-        public final ModConfigSpec.BooleanValue enableSafeAsyncCalculations;
-        public final ModConfigSpec.BooleanValue debugPerformanceLogging;
-        public final ModConfigSpec.ConfigValue<List<? extends String>> fakePlayers;
+        public final ForgeConfigSpec.BooleanValue enableServerOptimizations;
+        public final ForgeConfigSpec.LongValue maxSpellScanMillisPerTick;
+        public final ForgeConfigSpec.BooleanValue enableSafeAsyncCalculations;
+        public final ForgeConfigSpec.BooleanValue debugPerformanceLogging;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> fakePlayers;
 
-        private Server(ModConfigSpec.Builder builder) {
+        private Server(ForgeConfigSpec.Builder builder) {
             builder.comment("Iron Magic Duel - server settings").push("server");
             enableServerOptimizations = builder.comment("Enable server-side safe spell workload optimizations.")
                     .define("enableServerOptimizations", true);

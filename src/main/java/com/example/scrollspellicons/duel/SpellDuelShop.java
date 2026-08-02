@@ -1,6 +1,5 @@
 package com.example.scrollspellicons.duel;
 
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -8,10 +7,9 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.inventory.ChestMenu;
-import net.minecraft.world.item.component.CustomData;
-import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
 
 import java.util.Map;
 import java.util.UUID;
@@ -31,14 +29,14 @@ public final class SpellDuelShop {
         ItemStack stack = new ItemStack(Items.BARREL);
         CompoundTag tag = new CompoundTag();
         tag.putBoolean("IronMagicShop", true);
-        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
-        stack.set(DataComponents.CUSTOM_NAME, Component.literal("无限商店"));
+        stack.setTag(tag);
+        stack.setHoverName(Component.literal("无限商店"));
         return stack;
     }
 
     public static boolean isShop(ItemStack stack) {
         return stack.is(Items.BARREL)
-                && stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).contains("IronMagicShop");
+                && stack.hasTag() && stack.getTag().getBoolean("IronMagicShop");
     }
 
     @SubscribeEvent
@@ -104,7 +102,7 @@ public final class SpellDuelShop {
                     com.google.gson.JsonObject page = new com.google.gson.JsonObject();
                     for (int i = 0; i < PAGE_SIZE; i++) {
                         ItemStack stack = items[p][i];
-                        if (!stack.isEmpty()) page.addProperty(Integer.toString(i), stack.save(server.registryAccess()).toString());
+                        if (!stack.isEmpty()) page.addProperty(Integer.toString(i), stack.save(new CompoundTag()).toString());
                     }
                     pages.add(page);
                 }
@@ -135,8 +133,7 @@ public final class SpellDuelShop {
                             String key = Integer.toString(i);
                             if (!page.has(key)) continue;
                             try {
-                                items[p][i] = ItemStack.parse(server.registryAccess(),
-                                        net.minecraft.nbt.TagParser.parseTag(page.get(key).getAsString())).orElse(ItemStack.EMPTY);
+                                items[p][i] = ItemStack.of(net.minecraft.nbt.TagParser.parseTag(page.get(key).getAsString()));
                             } catch (Exception ignoredSlot) {
                                 // A damaged or unavailable item must not erase the other slots.
                                 items[p][i] = ItemStack.EMPTY;
@@ -150,11 +147,11 @@ public final class SpellDuelShop {
                 if (java.nio.file.Files.exists(legacy)) {
                     CompoundTag root;
                     try (var input = java.nio.file.Files.newInputStream(legacy)) {
-                        root = net.minecraft.nbt.NbtIo.readCompressed(input, net.minecraft.nbt.NbtAccounter.unlimitedHeap());
+                        root = net.minecraft.nbt.NbtIo.readCompressed(input);
                     }
                     for (int p = 0; p < PAGES; p++) for (int i = 0; i < PAGE_SIZE; i++) {
                         String key = "p" + p + "_" + i;
-                        if (root.contains(key)) items[p][i] = ItemStack.parse(server.registryAccess(), root.getCompound(key)).orElse(ItemStack.EMPTY);
+                        if (root.contains(key)) items[p][i] = ItemStack.of(root.getCompound(key));
                     }
                     save();
                 }
