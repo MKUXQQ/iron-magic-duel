@@ -83,19 +83,30 @@ public final class SpellDuelNetwork {
 
     public static void sendPlayerSelection(ServerPlayer player) {
         SpellDuelManager manager = SpellDuelEvents.manager(player.getServer());
-        Map<UUID, PlayerChoice> byId = new LinkedHashMap<>();
-        // This is the authoritative server player list.  Do not use client
-        // tracking/player-info data here: players outside the selector's view
-        // distance must still be selectable.
-        for (ServerPlayer online : player.getServer().getPlayerList().getPlayers()) {
+        List<PlayerChoice> choices = new ArrayList<>();
+        for (ServerPlayer online : collectAllOnlinePlayers(player.getServer())) {
             SpellDuelGroup.Team team = manager.selectedTeam(player.getUUID(), online.getUUID());
             String groupId = manager.selectedGroup(online.getUUID());
-            byId.put(online.getUUID(), new PlayerChoice(online.getUUID(), online.getGameProfile().getName(),
+            choices.add(new PlayerChoice(online.getUUID(), online.getGameProfile().getName(),
                     groupId == null ? "" : groupId, team == null ? -1 : team == SpellDuelGroup.Team.A ? 0 : 1));
         }
-        List<PlayerChoice> choices = new ArrayList<>(byId.values());
-        choices.sort(java.util.Comparator.comparing(PlayerChoice::name, String.CASE_INSENSITIVE_ORDER));
         send(player, new PlayerSelectionPayload(choices));
+    }
+
+    /**
+     * Merges the connection list with every loaded dimension.  Some fake-player
+     * implementations are present in a ServerLevel before (or without) being
+     * exposed consistently by PlayerList, so neither source is sufficient alone.
+     */
+    private static List<ServerPlayer> collectAllOnlinePlayers(net.minecraft.server.MinecraftServer server) {
+        Map<UUID, ServerPlayer> byId = new LinkedHashMap<>();
+        for (ServerPlayer online : server.getPlayerList().getPlayers()) byId.put(online.getUUID(), online);
+        for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
+            for (ServerPlayer online : level.players()) byId.put(online.getUUID(), online);
+        }
+        List<ServerPlayer> result = new ArrayList<>(byId.values());
+        result.sort(java.util.Comparator.comparing(online -> online.getGameProfile().getName(), String.CASE_INSENSITIVE_ORDER));
+        return result;
     }
     public static void sendSelectionClose(ServerPlayer player) { send(player, new SelectionClosePayload()); }
 

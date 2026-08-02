@@ -1,6 +1,7 @@
 package com.example.scrollspellicons.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.BufferBuilder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -14,6 +15,10 @@ import com.example.scrollspellicons.duel.SpellDuelItems;
 /** Client-only floating labels above private point-selector particles. */
 @EventBusSubscriber(value = Dist.CLIENT, modid = "iron_magic_duel")
 public final class PointMarkerRenderer {
+    /** Dedicated storage: never flush Minecraft's shared world-render buffer from a stage callback. */
+    private static final BufferBuilder LABEL_STORAGE = new BufferBuilder(64 * 1024);
+    private static final MultiBufferSource.BufferSource LABEL_BUFFER = MultiBufferSource.immediate(LABEL_STORAGE);
+
     private PointMarkerRenderer() {}
     @SubscribeEvent
     public static void render(RenderLevelStageEvent event) {
@@ -28,17 +33,16 @@ public final class PointMarkerRenderer {
         var camera = mc.gameRenderer.getMainCamera();
         var cameraPos = camera.getPosition();
         PoseStack pose = event.getPoseStack();
-        MultiBufferSource.BufferSource buffer = mc.renderBuffers().bufferSource();
         for (var marker : SpellDuelClientState.pointMarkers()) {
             pose.pushPose();
             pose.translate(marker.x() - cameraPos.x, marker.y() - cameraPos.y, marker.z() - cameraPos.z);
             pose.mulPose(camera.rotation());
             pose.scale(-0.025F, -0.025F, 0.025F);
             int width = mc.font.width(marker.label());
-            mc.font.drawInBatch(marker.label(), -width / 2.0F, 0, 0xFFFFFFFF, false, pose.last().pose(), buffer,
+            mc.font.drawInBatch(marker.label(), -width / 2.0F, 0, 0xFFFFFFFF, false, pose.last().pose(), LABEL_BUFFER,
                     Font.DisplayMode.SEE_THROUGH, 0x66000000, LightTexture.FULL_BRIGHT);
             pose.popPose();
         }
-        buffer.endBatch();
+        LABEL_BUFFER.endBatch();
     }
 }

@@ -33,6 +33,8 @@ public final class ScrollIconResolverSelfTest {
         require(network, "SimpleChannel", "Forge networking"); require(network, "broadcastSnapshots", "spectator snapshots"); require(network, "broadcastCooldowns", "cooldown synchronization"); require(network, "PlayerSelectionPayload", "player selector packets"); require(network, "spellbook", "Curios spellbook lookup");
         String manager = Files.readString(Path.of("src/main/java/com/example/scrollspellicons/duel/SpellDuelManager.java"));
         require(manager, "beginEditingGroup", "editing group creation"); require(manager, "readyForPlayers", "point group selected before new group"); require(manager, "previous.add(target, null)", "online player reassignment"); require(manager, "createPointGroup", "unlimited point group creation"); require(manager, "showPointMarkers", "private point marker particles"); require(manager, "cancelSelectedPlayer", "selected player removal"); require(manager, "clearPlayers", "group roster clearing"); require(manager, "savePoints", "persistent duel points");
+        String events = Files.readString(Path.of("src/main/java/com/example/scrollspellicons/duel/SpellDuelEvents.java"));
+        require(events, "SpellPreCastEvent", "spectator spell pre-cast guard"); require(events, "isSpectator()", "spectator cast rejection"); require(events, "setCanceled(true)", "server-authoritative cast cancellation"); require(events, "resetCastingState()", "active spectator cast reset"); require(manager, "resetCastingState()", "cast reset when joining spectator mode");
         String commands = Files.readString(Path.of("src/main/java/com/example/scrollspellicons/duel/SpellDuelCommands.java"));
         for (String command : new String[]{"tool", "shop", "start", "spectate", "hud", "clear", "fake_players"}) require(commands, command, "command surface");
         if (commands.contains("Commands.literal(\"display\").requires") || commands.contains("Commands.literal(\"point\").requires")) throw new AssertionError("removed root commands are still registered");
@@ -47,7 +49,18 @@ public final class ScrollIconResolverSelfTest {
         }
         String selectionNetwork = Files.readString(Path.of("src/main/java/com/example/scrollspellicons/duel/SpellDuelNetwork.java"));
         require(selectionNetwork, "getPlayerList().getPlayers()", "authoritative online player selector");
-        require(selectionNetwork, "choices.sort", "stable complete player list");
+        require(selectionNetwork, "getAllLevels()", "cross-dimension player scan");
+        require(selectionNetwork, "level.players()", "dimension player scan");
+        require(selectionNetwork, "Map<UUID, ServerPlayer>", "UUID de-duplication");
+        require(selectionNetwork, "result.sort", "stable complete player list");
+        String selector = Files.readString(Path.of("src/main/java/com/example/scrollspellicons/client/PlayerSelectionScreen.java"));
+        require(selector, "42 + 8 + visibleRows() * ROW_HEIGHT + 45", "final player-selector row padding");
+        String pointRenderer = Files.readString(Path.of("src/main/java/com/example/scrollspellicons/client/PointMarkerRenderer.java"));
+        require(pointRenderer, "LABEL_STORAGE", "isolated point-label render storage");
+        require(pointRenderer, "LABEL_BUFFER", "isolated point-label render buffer");
+        if (pointRenderer.contains("mc.renderBuffers().bufferSource()")) {
+            throw new AssertionError("point labels must never flush Forge's shared world buffer");
+        }
         require(selectionNetwork, "findCurios(\"spellbook\")", "Curios spellbook scan");
         require(selectionNetwork, "getActiveSpells()", "active spells read from Curios spellbook");
         if (Files.exists(Path.of("src/main/java/com/example/scrollspellicons/client/ClientModEvents.java"))

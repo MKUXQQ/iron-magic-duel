@@ -9,6 +9,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 /** Centered online-player picker.  Esc deletes its current editing group. */
@@ -22,7 +23,9 @@ public final class PlayerSelectionScreen extends Screen {
 
     private PlayerSelectionScreen(List<SpellDuelNetwork.PlayerChoice> players) {
         super(Component.literal("选择对战玩家"));
-        this.players = new ArrayList<>(players);
+        LinkedHashMap<java.util.UUID, SpellDuelNetwork.PlayerChoice> unique = new LinkedHashMap<>();
+        for (SpellDuelNetwork.PlayerChoice player : players) unique.put(player.id(), player);
+        this.players = new ArrayList<>(unique.values());
     }
 
     public static void open(List<SpellDuelNetwork.PlayerChoice> players) {
@@ -51,7 +54,7 @@ public final class PlayerSelectionScreen extends Screen {
         int top = (height - panelHeight) / 2;
         graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xFF111111);
         graphics.fill(left + 2, top + 2, left + panelWidth - 2, top + 34, 0xFF303030);
-        graphics.drawString(font, "选择在线玩家进行对战", left + 12, top + 12, 0xFFFFFF, false);
+        graphics.drawString(font, "选择在线玩家进行对战（检测到 " + players.size() + " 人）", left + 12, top + 12, 0xFFFFFF, false);
         graphics.drawString(font, "左键：A队  右键：B队  已选玩家左键删除  Esc：取消本次编辑", left + 12, top + 24, 0xBBBBBB, false);
 
         int listTop = top + 42;
@@ -88,9 +91,16 @@ public final class PlayerSelectionScreen extends Screen {
     }
 
     private int columns() { return players.size() <= 6 ? 1 : 2; }
-    private int visibleRows() { return Math.min(6, Math.max(1, (players.size() + columns() - 1) / columns())); }
+    private int visibleRows() {
+        int needed = Math.max(1, (players.size() + columns() - 1) / columns());
+        int screenCapacity = Math.max(1, (height - 110) / ROW_HEIGHT);
+        return Math.min(needed, screenCapacity);
+    }
     private int panelWidth() { return columns() == 1 ? SINGLE_COLUMN_WIDTH : DOUBLE_COLUMN_WIDTH; }
-    private int panelHeight() { return 42 + visibleRows() * ROW_HEIGHT + 45; }
+    // The list starts four pixels below listTop. Keep matching padding at the
+    // bottom, otherwise the final row is clipped while scrolling still treats
+    // it as visible (for example, player 9 in a two-column list).
+    private int panelHeight() { return 42 + 8 + visibleRows() * ROW_HEIGHT + 45; }
 
     private void drawFace(GuiGraphics graphics, java.util.UUID id, int x, int y) {
         PlayerInfo info = Minecraft.getInstance().getConnection() == null ? null

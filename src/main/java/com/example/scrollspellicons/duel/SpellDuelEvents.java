@@ -8,6 +8,8 @@ import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import io.redspace.ironsspellbooks.api.events.SpellPreCastEvent;
+import io.redspace.ironsspellbooks.api.magic.MagicData;
 
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -55,5 +57,14 @@ public final class SpellDuelEvents {
         if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
             manager(player.getServer()).recordPlayerDeath(player);
         }
+    }
+
+    /** Spectators may inspect a duel, but can never affect it by casting. */
+    @SubscribeEvent
+    public static void onSpellPreCast(SpellPreCastEvent event) {
+        if (!event.getEntity().isSpectator()) return;
+        event.setCanceled(true);
+        MagicData.getPlayerMagicData(event.getEntity()).resetCastingState();
+        event.getEntity().stopUsingItem();
     }
 }
