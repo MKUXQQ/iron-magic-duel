@@ -36,6 +36,14 @@ public final class SpellDuelEvents {
     public static void onServerTick(ServerTickEvent.Post event) {
         SpellDuelManager manager = manager(event.getServer());
         manager.tick();
+        if (event.getServer().getTickCount() % 5 == 0) {
+            for (net.minecraft.server.level.ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
+                if (player.getMainHandItem().is(SpellDuelItems.POINT_SELECTOR.get())
+                        || player.getOffhandItem().is(SpellDuelItems.POINT_SELECTOR.get())) {
+                    manager.showPointMarkers(player);
+                }
+            }
+        }
         SpellDuelNetwork.broadcastSnapshots(manager);
         if (++cooldownSyncTicks % 5 == 0) SpellDuelNetwork.broadcastCooldowns(manager);
     }

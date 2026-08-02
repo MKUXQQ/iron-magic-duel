@@ -91,6 +91,11 @@ public final class SpellDuelNetwork {
                 }
                 return new CooldownPayload(entries);
             });
+    private static final CustomPacketPayload.Type<PointMarkerPayload> POINT_MARKER_TYPE = new CustomPacketPayload.Type<>(
+            ResourceLocation.fromNamespaceAndPath(IronSpellPerformance.MOD_ID, "point_markers"));
+    private static final StreamCodec<RegistryFriendlyByteBuf, PointMarkerPayload> POINT_MARKER_CODEC = StreamCodec.of(
+            (buf, payload) -> { buf.writeVarInt(payload.markers.size()); for (PointMarker marker : payload.markers) { buf.writeUtf(marker.label, 64); buf.writeDouble(marker.x); buf.writeDouble(marker.y); buf.writeDouble(marker.z); } },
+            buf -> { List<PointMarker> markers = new ArrayList<>(); for (int i = buf.readVarInt(); i > 0; i--) markers.add(new PointMarker(buf.readUtf(64), buf.readDouble(), buf.readDouble(), buf.readDouble())); return new PointMarkerPayload(markers); });
     private static final CustomPacketPayload.Type<PlayerSelectionPayload> PLAYER_SELECTION_TYPE = new CustomPacketPayload.Type<>(
             ResourceLocation.fromNamespaceAndPath(IronSpellPerformance.MOD_ID, "player_selection"));
     private static final StreamCodec<RegistryFriendlyByteBuf, PlayerSelectionPayload> PLAYER_SELECTION_CODEC = StreamCodec.of(
@@ -134,6 +139,7 @@ public final class SpellDuelNetwork {
         registrar.playToClient(HUD_POSITION_TYPE, HUD_POSITION_CODEC, SpellDuelNetwork::handleHudPosition);
         registrar.playToClient(SNAPSHOT_TYPE, SNAPSHOT_CODEC, SpellDuelNetwork::handleSnapshot);
         registrar.playToClient(COOLDOWN_TYPE, COOLDOWN_CODEC, SpellDuelNetwork::handleCooldowns);
+        registrar.playToClient(POINT_MARKER_TYPE, POINT_MARKER_CODEC, SpellDuelNetwork::handlePointMarkers);
         registrar.playToClient(PLAYER_SELECTION_TYPE, PLAYER_SELECTION_CODEC, SpellDuelNetwork::handlePlayerSelection);
         registrar.playToClient(SELECTION_CLOSE_TYPE, SELECTION_CLOSE_CODEC, SpellDuelNetwork::handleSelectionClose);
         registrar.playToServer(SELECT_PLAYER_TYPE, SELECT_PLAYER_CODEC, SpellDuelNetwork::handleSelectPlayer);
@@ -154,6 +160,7 @@ public final class SpellDuelNetwork {
     public static void sendHudPosition(ServerPlayer player, int x, int y) {
         PacketDistributor.sendToPlayer(player, new HudPositionPayload(x, y));
     }
+    public static void sendPointMarkers(ServerPlayer player, List<PointMarker> markers) { PacketDistributor.sendToPlayer(player, new PointMarkerPayload(markers)); }
 
     private static void handleDisplay(DisplayPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> com.example.scrollspellicons.client.SpellDuelClientState.setDisplayEnabled(payload.enabled));
@@ -170,16 +177,18 @@ public final class SpellDuelNetwork {
     private static void handleCooldowns(CooldownPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> com.example.scrollspellicons.client.SpellDuelClientState.setCooldowns(payload.entries));
     }
+    private static void handlePointMarkers(PointMarkerPayload payload, IPayloadContext context) { context.enqueueWork(() -> com.example.scrollspellicons.client.SpellDuelClientState.setPointMarkers(payload.markers)); }
 
     public static void sendPlayerSelection(ServerPlayer player) {
         SpellDuelManager manager = SpellDuelEvents.manager(player.getServer());
-        List<PlayerChoice> choices = new ArrayList<>();
+        Map<UUID, PlayerChoice> byId = new LinkedHashMap<>();
         for (ServerPlayer online : player.getServer().getPlayerList().getPlayers()) {
             SpellDuelGroup.Team team = manager.selectedTeam(player.getUUID(), online.getUUID());
             String groupId = manager.selectedGroup(online.getUUID());
-            choices.add(new PlayerChoice(online.getUUID(), online.getGameProfile().getName(),
+            byId.put(online.getUUID(), new PlayerChoice(online.getUUID(), online.getGameProfile().getName(),
                     groupId == null ? "" : groupId, team == null ? -1 : team == SpellDuelGroup.Team.A ? 0 : 1));
         }
+        List<PlayerChoice> choices = new ArrayList<>(byId.values());
         PacketDistributor.sendToPlayer(player, new PlayerSelectionPayload(choices));
     }
 
@@ -307,6 +316,10 @@ public final class SpellDuelNetwork {
     public record CooldownPayload(List<CooldownEntry> entries) implements CustomPacketPayload {
         @Override public Type<? extends CustomPacketPayload> type() { return COOLDOWN_TYPE; }
     }
+    public record PointMarkerPayload(List<PointMarker> markers) implements CustomPacketPayload {
+        @Override public Type<? extends CustomPacketPayload> type() { return POINT_MARKER_TYPE; }
+    }
+    public record PointMarker(String label, double x, double y, double z) {}
 
     public record PlayerSelectionPayload(List<PlayerChoice> players) implements CustomPacketPayload {
         @Override public Type<? extends CustomPacketPayload> type() { return PLAYER_SELECTION_TYPE; }

@@ -32,7 +32,7 @@ public final class ScrollIconResolverSelfTest {
         }
         expect("iron_magic_duel", gradleProperties.getProperty("mod_id"));
         expect("Iron Magic Duel", gradleProperties.getProperty("mod_name"));
-        expect("1.0.50", gradleProperties.getProperty("mod_version"));
+        expect("1.0.54", gradleProperties.getProperty("mod_version"));
         expect("MKUXQQ", gradleProperties.getProperty("mod_authors"));
         expectNot("iron_spell_performance", gradleProperties.getProperty("mod_id"));
         expectNot("Iron Spellcasting Performance", gradleProperties.getProperty("mod_name"));
@@ -52,7 +52,7 @@ public final class ScrollIconResolverSelfTest {
         }
         if (!modsToml.contains("modId = \"iron_magic_duel\"")
                 || !modsToml.contains("displayName = \"Iron Magic Duel\"")
-                || !modsToml.contains("version = \"1.0.50\"")
+                || !modsToml.contains("version = \"1.0.54\"")
                 || !modsToml.contains("authors = \"MKUXQQ\"")
                 || !modsToml.contains("logoFile = \"icon.png\"")
                 || modsToml.contains("modId = \"uilib\"")) {
@@ -79,6 +79,10 @@ public final class ScrollIconResolverSelfTest {
         if (!commands.contains("literal(\"tool\")") || !manager.contains("beginEditingGroup")
                 || !manager.contains("cancelEditingGroup") || !manager.contains("cancelSelectedPlayer")) {
             throw new AssertionError("tool command or editing-group player selection flow is missing");
+        }
+        if (!commands.contains("literal(\"stop\")") || !manager.contains("stopAll")
+                || !manager.contains("showPointMarkers")) {
+            throw new AssertionError("stop command or point selector markers are missing");
         }
         if (!commands.contains("literal(\"clear\")") || !commands.contains("literal(\"all\")")
                 || !commands.contains("literal(\"group\")") || !commands.contains("literal(\"point\")")) {

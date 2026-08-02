@@ -13,6 +13,7 @@ public final class SpellDuelClientState {
     private static String snapshotGroup = "";
     private static java.util.List<com.example.scrollspellicons.duel.SpellDuelNetwork.SnapshotEntry> snapshot = java.util.List.of();
     private static Map<UUID, Map<String, SyncedCooldown>> cooldowns = Map.of();
+    private static java.util.List<SpellDuelNetwork.PointMarker> pointMarkers = java.util.List.of();
     // A large X is clamped to the right edge by SpellDuelHud; Y keeps the HUD at the top.
     private static int hudX = 10000;
     private static int hudY = 8;
@@ -27,6 +28,8 @@ public final class SpellDuelClientState {
     public static String snapshotGroup() { return snapshotGroup; }
     public static java.util.List<com.example.scrollspellicons.duel.SpellDuelNetwork.SnapshotEntry> snapshot() { return snapshot; }
     public static void setSnapshot(String group, java.util.List<com.example.scrollspellicons.duel.SpellDuelNetwork.SnapshotEntry> entries) { snapshotGroup = group; snapshot = java.util.List.copyOf(entries); }
+    public static java.util.List<SpellDuelNetwork.PointMarker> pointMarkers() { return pointMarkers; }
+    public static void setPointMarkers(java.util.List<SpellDuelNetwork.PointMarker> markers) { pointMarkers = java.util.List.copyOf(markers); }
     public static Map<String, Integer> cooldowns(UUID playerId) {
         long now = clientTick();
         Map<String, Integer> result = new HashMap<>();

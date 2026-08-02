@@ -125,9 +125,9 @@ public final class PlayerSelectionScreen extends Screen {
                     // While a custom screen is open the server-side crouching flag can be
                     // one tick behind. Read the actual Shift key so sneak-left is reliable.
                     boolean crouching = Minecraft.getInstance().options.keyShift.isDown();
-                    boolean alreadySelected = !players.get(index).selectedGroup().isEmpty();
+                    boolean selectedInThisGroup = players.get(index).ownTeam() >= 0;
                     Minecraft.getInstance().getConnection().send(new SpellDuelNetwork.SelectPlayerPayload(
-                            players.get(index).id(), (byte) (button == 0 && (crouching || alreadySelected) ? 2 : button == 0 ? 0 : 1)));
+                            players.get(index).id(), (byte) (button == 0 && (crouching || selectedInThisGroup) ? 2 : button == 0 ? 0 : 1)));
                     return true;
                 }
             }

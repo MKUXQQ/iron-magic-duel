@@ -16,6 +16,7 @@ import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.core.particles.ParticleTypes;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -78,7 +79,13 @@ public final class SpellDuelManager {
         SpellDuelGroup group = groups.get(state.currentGroup);
         if (group == null || !editingGroups.contains(group.id()) || group.active()) return false;
         String selectedGroup = selectedGroup(target);
-        if (selectedGroup != null && !selectedGroup.equals(group.id())) return false;
+        if (selectedGroup != null && !selectedGroup.equals(group.id())) {
+            SpellDuelGroup previous = groups.get(selectedGroup);
+            if (previous == null) return false;
+            if (previous.active()) finish(previous, null, false);
+            previous.add(target, null);
+            clearSelectionGlow(Set.of(target));
+        }
         group.add(target, team);
         ServerPlayer player = server.getPlayerList().getPlayer(target);
         if (player != null) setSelectionGlow(player);
@@ -236,6 +243,24 @@ public final class SpellDuelManager {
         else state.pointB = point;
     }
 
+    /** Sends all saved point markers only to a player holding the point selector. */
+    public void showPointMarkers(ServerPlayer player) {
+        java.util.List<SpellDuelNetwork.PointMarker> labels = new ArrayList<>();
+        for (SpellDuelGroup group : groups.values()) {
+            sendPointMarker(player, labels, group.id(), "A", group.pointA(), ParticleTypes.END_ROD);
+            sendPointMarker(player, labels, group.id(), "B", group.pointB(), ParticleTypes.SMOKE);
+        }
+        SpellDuelNetwork.sendPointMarkers(player, labels);
+    }
+
+    private void sendPointMarker(ServerPlayer player, java.util.List<SpellDuelNetwork.PointMarker> labels, String groupId, String pointName,
+                                 SpellDuelGroup.PointLocation point,
+                                 net.minecraft.core.particles.ParticleOptions particle) {
+        if (point == null || !player.level().dimension().location().toString().equals(point.dimension())) return;
+        player.serverLevel().sendParticles(player, particle, true, point.x(), point.y() + 0.25, point.z(), 5, 0.16, 0.20, 0.16, 0.01);
+        labels.add(new SpellDuelNetwork.PointMarker(groupId + " · " + pointName, point.x(), point.y() + 0.85, point.z()));
+    }
+
     public boolean setPointFromCommand(String id, SpellDuelGroup.Team team, ServerPlayer player) {
         SpellDuelGroup group = groups.get(id);
         if (group == null || group.active()) return false;
@@ -305,6 +330,20 @@ public final class SpellDuelManager {
         Map<String, String> result = new LinkedHashMap<>();
         for (String id : new ArrayList<>(groups.keySet())) result.put(id, start(id));
         return result;
+    }
+
+    /** Cancels an active duel immediately and keeps its A/B point configuration. */
+    public boolean stop(String id) {
+        SpellDuelGroup group = groups.get(id);
+        if (group == null || !group.active()) return false;
+        finish(group, null, false);
+        return true;
+    }
+
+    public int stopAll() {
+        int stopped = 0;
+        for (String id : new ArrayList<>(groups.keySet())) if (stop(id)) stopped++;
+        return stopped;
     }
 
     private void teleportTeam(Set<UUID> players, SpellDuelGroup.PointLocation point, SpellDuelGroup group) {
