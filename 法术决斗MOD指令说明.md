@@ -2,8 +2,8 @@
 
 本文档对应当前已部署版本：
 
-- Minecraft 1.20.1 Forge：`iron_magic_duel 1.0.68`
-- Minecraft 1.21.1 NeoForge：`iron_magic_duel 1.0.58`
+- Minecraft 1.20.1 Forge：`iron_magic_duel 1.0.69`
+- Minecraft 1.21.1 NeoForge：`iron_magic_duel 1.0.59`
 
 `duel_N` 表示决斗组 ID，例如 `duel_1`、`duel_2`。输入组 ID 的指令支持 Tab 自动补全。
 
@@ -19,6 +19,8 @@
 | `/spell_duel stop duel_N` | 管理员 | 立即停止指定的活动决斗，恢复参与玩家和观战玩家；保留该组 A/B 点位。 |
 
 停止决斗不会删除决斗组的点位配置。停止后可以重新打开玩家选择器、选择新玩家并再次使用同一个决斗组。
+
+对战玩家生命值归零时会由服务端立即判定淘汰并取消原版死亡/重生流程。观战 HUD 会显示该玩家生命值为 0；结算等待的 5 秒内玩家受到临时保护，之后返回原位置并恢复原游戏模式。
 
 ## 工具与商店
 

@@ -32,7 +32,7 @@ public final class ScrollIconResolverSelfTest {
         }
         expect("iron_magic_duel", gradleProperties.getProperty("mod_id"));
         expect("Iron Magic Duel", gradleProperties.getProperty("mod_name"));
-        expect("1.0.58", gradleProperties.getProperty("mod_version"));
+        expect("1.0.59", gradleProperties.getProperty("mod_version"));
         expect("MKUXQQ", gradleProperties.getProperty("mod_authors"));
         expectNot("iron_spell_performance", gradleProperties.getProperty("mod_id"));
         expectNot("Iron Spellcasting Performance", gradleProperties.getProperty("mod_name"));
@@ -51,7 +51,7 @@ public final class ScrollIconResolverSelfTest {
         }
         if (!modsToml.contains("modId = \"iron_magic_duel\"")
                 || !modsToml.contains("displayName = \"Iron Magic Duel\"")
-                || !modsToml.contains("version = \"1.0.58\"")
+                || !modsToml.contains("version = \"1.0.59\"")
                 || !modsToml.contains("authors = \"MKUXQQ\"")
                 || !modsToml.contains("logoFile = \"icon.png\"")
                 || modsToml.contains("modId = \"uilib\"")) {
@@ -153,6 +153,19 @@ public final class ScrollIconResolverSelfTest {
                 || !events.contains("setCanceled(true)") || !events.contains("resetCastingState()")
                 || !manager.contains("resetCastingState()")) {
             throw new AssertionError("duel spectators must be unable to start or continue casting spells");
+        }
+        if (!events.contains("LivingDeathEvent") || !events.contains("recordPlayerDeath(player)")
+                || !events.contains("event.setCanceled(true)")) {
+            throw new AssertionError("duel deaths must cancel vanilla death and respawn loops");
+        }
+        if (!manager.contains("eliminatedPlayers") || !manager.contains("protectPendingRestore")
+                || !manager.contains("player.setInvulnerable(true)") || !manager.contains("player.deathTime = 0")
+                || !manager.contains("serverTicks + 100") || !manager.contains("isInvulnerable()")) {
+            throw new AssertionError("eliminated and pending-return players must be protected and restored safely");
+        }
+        if (!network.contains("broadcastEliminationSnapshot") || !network.contains("snapshotHealth")
+                || !network.contains("? 0.0F")) {
+            throw new AssertionError("spectators must receive an explicit zero-health death frame");
         }
         if (!events.contains("broadcastCooldowns") || !events.contains("% 5")) {
             throw new AssertionError("server must force-sync cooldowns at a bounded interval");

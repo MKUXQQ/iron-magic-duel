@@ -7,6 +7,8 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.bus.api.EventPriority;
 import io.redspace.ironsspellbooks.api.events.SpellPreCastEvent;
 import io.redspace.ironsspellbooks.api.magic.MagicData;
 
@@ -55,6 +57,14 @@ public final class SpellDuelEvents {
         if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
             SpellDuelManager manager = manager(player.getServer());
             SpellDuelNetwork.sendDisplay(player, manager.displayEnabled());
+        }
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public static void onPlayerDeath(LivingDeathEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player
+                && manager(player.getServer()).recordPlayerDeath(player)) {
+            event.setCanceled(true);
         }
     }
 
