@@ -7,6 +7,8 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import io.redspace.ironsspellbooks.api.events.SpellPreCastEvent;
+import io.redspace.ironsspellbooks.api.magic.MagicData;
 
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -54,5 +56,14 @@ public final class SpellDuelEvents {
             SpellDuelManager manager = manager(player.getServer());
             SpellDuelNetwork.sendDisplay(player, manager.displayEnabled());
         }
+    }
+
+    /** Spectators may inspect a duel, but can never affect it by casting. */
+    @SubscribeEvent
+    public static void onSpellPreCast(SpellPreCastEvent event) {
+        if (!event.getEntity().isSpectator()) return;
+        event.setCanceled(true);
+        MagicData.getPlayerMagicData(event.getEntity()).resetCastingState();
+        event.getEntity().stopUsingItem();
     }
 }

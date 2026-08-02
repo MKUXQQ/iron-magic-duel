@@ -32,7 +32,7 @@ public final class ScrollIconResolverSelfTest {
         }
         expect("iron_magic_duel", gradleProperties.getProperty("mod_id"));
         expect("Iron Magic Duel", gradleProperties.getProperty("mod_name"));
-        expect("1.0.54", gradleProperties.getProperty("mod_version"));
+        expect("1.0.58", gradleProperties.getProperty("mod_version"));
         expect("MKUXQQ", gradleProperties.getProperty("mod_authors"));
         expectNot("iron_spell_performance", gradleProperties.getProperty("mod_id"));
         expectNot("Iron Spellcasting Performance", gradleProperties.getProperty("mod_name"));
@@ -51,7 +51,7 @@ public final class ScrollIconResolverSelfTest {
         }
         if (!modsToml.contains("modId = \"iron_magic_duel\"")
                 || !modsToml.contains("displayName = \"Iron Magic Duel\"")
-                || !modsToml.contains("version = \"1.0.54\"")
+                || !modsToml.contains("version = \"1.0.58\"")
                 || !modsToml.contains("authors = \"MKUXQQ\"")
                 || !modsToml.contains("logoFile = \"icon.png\"")
                 || modsToml.contains("modId = \"uilib\"")) {
@@ -121,6 +121,19 @@ public final class ScrollIconResolverSelfTest {
             throw new AssertionError("HUD must use Curios spellbooks only and render only active cooldown seconds on icons");
         }
         String network = Files.readString(Path.of("src/main/java/com/example/scrollspellicons/duel/SpellDuelNetwork.java"));
+        if (!network.contains("collectAllOnlinePlayers") || !network.contains("getAllLevels()")
+                || !network.contains("level.players()") || !network.contains("Map<UUID, ServerPlayer>")) {
+            throw new AssertionError("player selector must merge all server and dimension players by UUID");
+        }
+        String selector = Files.readString(Path.of("src/main/java/com/example/scrollspellicons/client/PlayerSelectionScreen.java"));
+        if (!selector.contains("42 + 8 + visibleRows() * ROW_HEIGHT + 45")) {
+            throw new AssertionError("player selector must reserve top and bottom padding for its final row");
+        }
+        String pointRenderer = Files.readString(Path.of("src/main/java/com/example/scrollspellicons/client/PointMarkerRenderer.java"));
+        if (!pointRenderer.contains("LABEL_STORAGE") || !pointRenderer.contains("LABEL_BUFFER")
+                || pointRenderer.contains("mc.renderBuffers().bufferSource()")) {
+            throw new AssertionError("point labels must use an isolated buffer and never flush the world buffer");
+        }
         if (!network.contains("findCurios(\"spellbook\")") || network.contains("player.getInventory()")
                 || !network.contains("getCooldownRemaining") || !network.contains("COOLDOWN_TYPE")
                 || !network.contains("broadcastCooldowns")) {
@@ -136,6 +149,11 @@ public final class ScrollIconResolverSelfTest {
             throw new AssertionError("client must retain server-synchronized cooldowns for every displayed player");
         }
         String events = Files.readString(Path.of("src/main/java/com/example/scrollspellicons/duel/SpellDuelEvents.java"));
+        if (!events.contains("SpellPreCastEvent") || !events.contains("isSpectator()")
+                || !events.contains("setCanceled(true)") || !events.contains("resetCastingState()")
+                || !manager.contains("resetCastingState()")) {
+            throw new AssertionError("duel spectators must be unable to start or continue casting spells");
+        }
         if (!events.contains("broadcastCooldowns") || !events.contains("% 5")) {
             throw new AssertionError("server must force-sync cooldowns at a bounded interval");
         }

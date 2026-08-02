@@ -2,8 +2,8 @@
 
 本文档对应当前已部署版本：
 
-- Minecraft 1.20.1 Forge：`iron_magic_duel 1.0.64`
-- Minecraft 1.21.1 NeoForge：`iron_magic_duel 1.0.54`
+- Minecraft 1.20.1 Forge：`iron_magic_duel 1.0.68`
+- Minecraft 1.21.1 NeoForge：`iron_magic_duel 1.0.58`
 
 `duel_N` 表示决斗组 ID，例如 `duel_1`、`duel_2`。输入组 ID 的指令支持 Tab 自动补全。
 
@@ -58,7 +58,7 @@
 | `/spell_duel spectate leave` | 玩家 | 退出观战并恢复观战前的位置和游戏模式。 |
 | `/spell_duel hud <x> <y>` | 玩家 | 设置当前玩家观战 HUD 的屏幕坐标；`x`、`y` 范围为 `0–10000`。 |
 
-观战 HUD 会显示对战玩家的名称、头像、生命值、蓝量、Curios 法术书中的法术和冷却。普通非观战玩家不会显示其他玩家的决斗 HUD。
+观战 HUD 会显示对战玩家的名称、头像、生命值、蓝量、Curios 法术书中的法术和冷却。普通非观战玩家不会显示其他玩家的决斗 HUD。观战玩家不能施放法术；进入观战时会中断已有施法，退出观战后恢复正常施法。
 
 ## 清理指令
 
@@ -113,4 +113,3 @@ Forge 1.20.1 已按之前的要求删除 `/spell_duel point` 和 `/spell_duel di
 5. 输入 `/spell_duel start duel_1` 开始决斗。
 6. 需要强制结束时输入 `/spell_duel stop duel_1`。
 7. 需要清空玩家并保留点位时输入 `/spell_duel clear group duel_1`。
-

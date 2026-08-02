@@ -181,15 +181,26 @@ public final class SpellDuelNetwork {
 
     public static void sendPlayerSelection(ServerPlayer player) {
         SpellDuelManager manager = SpellDuelEvents.manager(player.getServer());
-        Map<UUID, PlayerChoice> byId = new LinkedHashMap<>();
-        for (ServerPlayer online : player.getServer().getPlayerList().getPlayers()) {
+        List<PlayerChoice> choices = new ArrayList<>();
+        for (ServerPlayer online : collectAllOnlinePlayers(player.getServer())) {
             SpellDuelGroup.Team team = manager.selectedTeam(player.getUUID(), online.getUUID());
             String groupId = manager.selectedGroup(online.getUUID());
-            byId.put(online.getUUID(), new PlayerChoice(online.getUUID(), online.getGameProfile().getName(),
+            choices.add(new PlayerChoice(online.getUUID(), online.getGameProfile().getName(),
                     groupId == null ? "" : groupId, team == null ? -1 : team == SpellDuelGroup.Team.A ? 0 : 1));
         }
-        List<PlayerChoice> choices = new ArrayList<>(byId.values());
         PacketDistributor.sendToPlayer(player, new PlayerSelectionPayload(choices));
+    }
+
+    /** Complete server-side online snapshot, including cross-dimension and fake players. */
+    private static List<ServerPlayer> collectAllOnlinePlayers(net.minecraft.server.MinecraftServer server) {
+        Map<UUID, ServerPlayer> byId = new LinkedHashMap<>();
+        for (ServerPlayer online : server.getPlayerList().getPlayers()) byId.put(online.getUUID(), online);
+        for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
+            for (ServerPlayer online : level.players()) byId.put(online.getUUID(), online);
+        }
+        List<ServerPlayer> result = new ArrayList<>(byId.values());
+        result.sort(java.util.Comparator.comparing(online -> online.getGameProfile().getName(), String.CASE_INSENSITIVE_ORDER));
+        return result;
     }
 
     public static void sendSelectionClose(ServerPlayer player) {

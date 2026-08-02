@@ -370,6 +370,8 @@ public final class SpellDuelManager {
                 .putIfAbsent(player.getUUID(), SavedState.capture(player));
         spectators.add(player.getUUID());
         spectatorGroups.put(player.getUUID(), groupId);
+        io.redspace.ironsspellbooks.api.magic.MagicData.getPlayerMagicData(player).resetCastingState();
+        player.stopUsingItem();
         player.setGameMode(GameType.SPECTATOR);
         if (observationBlock != null) {
             ServerLevel level = server.getLevel(observationBlock.dimension());
