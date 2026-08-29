@@ -1,0 +1,303 @@
+package com.example.scrollspellicons.client;
+
+import io.redspace.ironsspellbooks.api.magic.MagicData;
+import io.redspace.ironsspellbooks.api.spells.ISpellContainer;
+import io.redspace.ironsspellbooks.api.spells.SpellSlot;
+import io.redspace.ironsspellbooks.capabilities.magic.CooldownInstance;
+import io.redspace.ironsspellbooks.compat.Curios;
+import io.redspace.ironsspellbooks.player.ClientMagicData;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.RenderGuiEvent;
+import top.theillusivec4.curios.api.CuriosApi;
+import org.joml.Quaternionf;
+import org.joml.Vector4f;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@EventBusSubscriber(value = Dist.CLIENT, modid = "iron_magic_duel")
+public final class SpellDuelHud {
+    private static final int MIN_HUD_WIDTH = 132;
+    private static final int MAX_HUD_WIDTH = 132;
+    private static final int SPELL_BOX_WIDTH = MIN_HUD_WIDTH;
+    private static final int CARD_WIDTH = MAX_HUD_WIDTH + 88;
+    private static final int SPELL_COLUMNS = 6;
+    private static final int HUD_MARGIN = 8;
+    /** Space reserved above the vanilla hotbar when the default HUD position is used. */
+    private static final int HOTBAR_CLEARANCE = 32;
+    // GuiGraphics colors are ARGB. Without FF this bar is fully transparent.
+    private static final int GREEN = 0xFF33AA55;
+    /** Iron's Spells 'n Spellbooks original gold spell-slot texture (icons.png, 88,84,22x22). */
+    private static final ResourceLocation IRONS_SPELL_SLOT = ResourceLocation.fromNamespaceAndPath(
+            "irons_spellbooks", "textures/gui/icons.png");
+    private SpellDuelHud() {}
+
+    @SubscribeEvent
+    public static void onHud(RenderGuiEvent.Post event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return;
+        if (mc.player.isSpectator()) {
+            renderSpectatorSnapshot(event.getGuiGraphics(), mc);
+            return;
+        }
+        renderLocalSpellHud(event.getGuiGraphics(), mc);
+        if (!SpellDuelClientState.displayEnabled()) return;
+        for (Player player : mc.level.players()) if (player.isAlive()) renderPlayerSpellBar(event.getGuiGraphics(), mc, player);
+    }
+
+    private static void renderPlayerSpellBar(GuiGraphics graphics, Minecraft mc, Player player) {
+        float[] screen = project(mc, player);
+        if (screen == null) return;
+        List<SpellVisual> spells = spells(player);
+        int hudWidth = hudWidth(spells.size());
+        int rows = spellRows(spells.size());
+        int spellHeight = rows * 18 + 6;
+        String name = player.getName().getString();
+        int panelWidth = Math.max(hudWidth, mc.font.width(name)) + 10;
+        int panelHeight = spellHeight + 2 + 20 + 14;
+        int x = Math.round(screen[0]) - panelWidth / 2;
+        int y = Math.round(screen[1]) - panelHeight - 4;
+        int contentX = x + (panelWidth - hudWidth) / 2;
+        int healthY = y + spellHeight + 2;
+        graphics.fill(x, y, x + panelWidth, y + panelHeight, 0xFF000000);
+        drawSpellBox(graphics, mc, spells, contentX, y, hudWidth, spellHeight);
+        float[] health = displayedHealth(player);
+        drawHealthBox(graphics, mc, contentX, healthY, hudWidth, health[0], health[1]);
+        graphics.drawString(mc.font, name, x + (panelWidth - mc.font.width(name)) / 2,
+                healthY + 22, 0xFFFFFF, true);
+    }
+
+    private static void renderLocalSpellHud(GuiGraphics graphics, Minecraft mc) {
+        renderPlayerHudAtDefaultPosition(graphics, mc, mc.player);
+    }
+
+    /** Uses the same compact no-name player HUD for the local player. */
+    private static void renderPlayerHudAtDefaultPosition(GuiGraphics graphics, Minecraft mc, Player player) {
+        List<SpellVisual> spells = spells(player);
+        int hudWidth = hudWidth(spells.size());
+        int spellHeight = 22;
+        int panelWidth = hudWidth;
+        int panelHeight = spellHeight + 20;
+        int x = hudX(graphics, panelWidth);
+        int y = hudY(graphics, panelHeight);
+        int contentX = x;
+        int spellY = y;
+        int healthY = spellY + spellHeight;
+        drawSpellBox(graphics, mc, spells, contentX, spellY, hudWidth, spellHeight);
+        float[] health = displayedHealth(player);
+        drawHealthBox(graphics, mc, contentX, healthY, hudWidth, health[0], health[1]);
+    }
+
+    private static int hudX(GuiGraphics graphics, int panelWidth) {
+        if (SpellDuelClientState.hudX() >= 9000) return Math.max(0, (graphics.guiWidth() - panelWidth) / 2);
+        return Math.max(0, Math.min(SpellDuelClientState.hudX(), graphics.guiWidth() - panelWidth));
+    }
+
+    private static int hudY(GuiGraphics graphics, int panelHeight) {
+        if (SpellDuelClientState.hudY() >= 9000) {
+            return Math.max(0, graphics.guiHeight() - panelHeight - HOTBAR_CLEARANCE);
+        }
+        return Math.max(0, Math.min(SpellDuelClientState.hudY(), graphics.guiHeight() - panelHeight));
+    }
+
+    private static void drawLocalPanelFrame(GuiGraphics graphics, int x, int y, int width, int height) {
+        drawFrame(graphics, x, y, width, height);
+    }
+
+    private static void renderSpectatorSnapshot(GuiGraphics graphics, Minecraft mc) {
+        int leftY = 12;
+        int rightY = 12;
+        int rightX = Math.max(8, graphics.guiWidth() - CARD_WIDTH - 8);
+        for (var entry : SpellDuelClientState.snapshot()) {
+            int x = entry.team() == 0 ? 8 : rightX;
+            int y = entry.team() == 0 ? leftY : rightY;
+            int height = renderSpectatorEntry(graphics, mc, entry, x, y);
+            if (entry.team() == 0) leftY += height + 8; else rightY += height + 8;
+        }
+    }
+
+    private static int renderSpectatorEntry(GuiGraphics graphics, Minecraft mc,
+                                            com.example.scrollspellicons.duel.SpellDuelNetwork.SnapshotEntry entry,
+                                            int x, int y) {
+        int spellCount = entry.spells().isBlank() ? 0 : entry.spells().split(",").length;
+        int hudWidth = hudWidth(spellCount);
+        int spellHeight = 22;
+        int height = spellHeight + 20;
+        int textX = x;
+        int spellY = y;
+        int healthY = spellY + spellHeight;
+
+        drawSpellBox(graphics, mc, parseSpells(entry.spells(), parseCooldowns(entry.cooldowns())), textX, spellY, hudWidth, spellHeight);
+        drawHealthBox(graphics, mc, textX, healthY, hudWidth, entry.health(), entry.maxHealth());
+        if (false && !entry.casting().isBlank()) {
+            graphics.drawString(mc.font, "施法：" + shortId(entry.casting()), textX, healthY + 23, 0x55FFFF, true);
+        }
+        return height;
+    }
+
+    private static void drawSpellBox(GuiGraphics graphics, Minecraft mc, List<SpellVisual> spells,
+                                     int x, int y, int width, int height) {
+        for (int i = 0; i < Math.min(SPELL_COLUMNS, spells.size()); i++) {
+            SpellVisual visual = spells.get(i);
+            int slotX = x + i * 22;
+            graphics.blit(IRONS_SPELL_SLOT, slotX, y, 88, 84, 22, 22);
+            renderSpellIcon(graphics, mc, visual, slotX + 3, y + 3);
+        }
+    }
+
+    private static void drawHealthBox(GuiGraphics graphics, Minecraft mc, int x, int y, int width,
+                                      float health, float maxHealth) {
+        float ratio = maxHealth > 0 && Float.isFinite(health) && Float.isFinite(maxHealth)
+                ? Math.max(0, Math.min(1, health / maxHealth)) : 0;
+        drawStatusBar(graphics, x, y, width, ratio, GREEN);
+    }
+
+    private static float[] displayedHealth(Player player) {
+        return new float[]{player.getHealth(), player.getMaxHealth()};
+    }
+
+    private static void drawStatusBar(GuiGraphics graphics, int x, int y, int width, float ratio, int fillColor) {
+        graphics.fill(x, y, x + width, y + 20, 0xFF000000);
+        graphics.fill(x + 1, y + 1, x + width - 1, y + 19, 0xFF777777);
+        graphics.fill(x + 3, y + 3, x + width - 3, y + 17, 0xFF0A0A0A);
+        int filledWidth = Math.round((width - 6) * ratio);
+        if (filledWidth > 0) graphics.fill(x + 3, y + 3, x + 3 + filledWidth, y + 17, fillColor);
+    }
+
+    private static void drawFrame(GuiGraphics graphics, int x, int y, int width, int height) {
+        graphics.fill(x, y, x + width, y + height, 0xFF07090D);
+        graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF555555);
+        graphics.fill(x + 3, y + 3, x + width - 3, y + height - 3, 0xFF151515);
+    }
+
+    private static int spellRows(int count) {
+        return Math.max(1, (count + SPELL_COLUMNS - 1) / SPELL_COLUMNS);
+    }
+
+    private static int hudWidth(int spellCount) {
+        int visibleColumns = Math.max(1, Math.min(SPELL_COLUMNS, spellCount));
+        return Math.max(MIN_HUD_WIDTH, Math.min(MAX_HUD_WIDTH, 8 + visibleColumns * 18));
+    }
+
+    private static List<SpellVisual> parseSpells(String encoded, Map<String, Integer> cooldowns) {
+        List<SpellVisual> result = new ArrayList<>();
+        if (encoded.isBlank()) return result;
+        for (String value : encoded.split(",")) {
+            String[] parts = value.split("\\|", 2);
+            try {
+                ResourceLocation spellId = ResourceLocation.parse(parts[0]);
+                result.add(new SpellVisual(spellId, 1, cooldowns.getOrDefault(spellId.toString(), 0)));
+            }
+            catch (IllegalArgumentException ignored) {}
+        }
+        return result;
+    }
+
+    private static Map<String, Integer> parseCooldowns(String encoded) {
+        Map<String, Integer> result = new HashMap<>();
+        if (encoded.isBlank()) return result;
+        for (String entry : encoded.trim().split("\\s+")) {
+            int separator = entry.lastIndexOf(':');
+            if (separator <= 0 || separator == entry.length() - 1) continue;
+            try { result.put(entry.substring(0, separator), Integer.parseInt(entry.substring(separator + 1))); }
+            catch (NumberFormatException ignored) {}
+        }
+        return result;
+    }
+
+    private static String shortId(String id) {
+        int index = id.indexOf(':');
+        return index >= 0 ? id.substring(index + 1) : id;
+    }
+
+    private static void renderSpellIcon(GuiGraphics graphics, Minecraft mc, SpellVisual visual, int x, int y) {
+        ResourceLocation icon = ScrollIconResolver.iconFor(visual.id()).orElse(null);
+        if (icon == null) return;
+        ResourceLocation spriteId = ResourceLocation.fromNamespaceAndPath(icon.getNamespace(),
+                icon.getPath().substring("textures/".length(), icon.getPath().length() - ".png".length()));
+        TextureAtlasSprite sprite = mc.getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(spriteId);
+        if (sprite.contents().name().equals(MissingTextureAtlasSprite.getLocation())) {
+            graphics.fill(x, y, x + 16, y + 16, 0xFF111111);
+            graphics.fill(x + 2, y + 2, x + 14, y + 14, 0xFF555555);
+            drawCooldownNumber(graphics, mc, x, y, visual.cooldownTicks());
+            return;
+        }
+        graphics.blit(x, y, 0, 16, 16, sprite);
+        drawCooldownNumber(graphics, mc, x, y, visual.cooldownTicks());
+    }
+
+    private static void drawCooldownNumber(GuiGraphics graphics, Minecraft mc, int x, int y, int cooldownTicks) {
+        int seconds = cooldownSeconds(cooldownTicks);
+        if (seconds <= 0) return;
+        String value = Integer.toString(seconds);
+        graphics.fill(x, y, x + 16, y + 16, 0xD9000000);
+        graphics.fill(x, y, x + 16, y + 1, 0xFFFFC94D);
+        graphics.fill(x, y + 15, x + 16, y + 16, 0xFFFFC94D);
+        graphics.fill(x, y, x + 1, y + 16, 0xFFFFC94D);
+        graphics.fill(x + 15, y, x + 16, y + 16, 0xFFFFC94D);
+        graphics.drawCenteredString(mc.font, value, x + 8, y + 4, 0xFFFFFFFF);
+    }
+
+    private static int cooldownSeconds(int cooldownTicks) {
+        return cooldownTicks <= 0 ? 0 : (cooldownTicks + 19) / 20;
+    }
+
+    private static float[] project(Minecraft mc, Player player) {
+        var camera = mc.gameRenderer.getMainCamera();
+        var relative = player.position().add(0, player.getBbHeight() + 0.25, 0).subtract(camera.getPosition());
+        Quaternionf inverseCamera = new Quaternionf(camera.rotation()).conjugate();
+        Vector4f clip = new Vector4f((float) relative.x, (float) relative.y, (float) relative.z, 1).rotate(inverseCamera);
+        mc.gameRenderer.getProjectionMatrix(mc.options.fov().get().floatValue()).transform(clip);
+        if (clip.w <= 0.05f) return null;
+        float x = (clip.x / clip.w * 0.5f + 0.5f) * mc.getWindow().getGuiScaledWidth();
+        float y = (1.0f - (clip.y / clip.w * 0.5f + 0.5f)) * mc.getWindow().getGuiScaledHeight();
+        if (x < -320 || x > mc.getWindow().getGuiScaledWidth() + 320 || y < -120 || y > mc.getWindow().getGuiScaledHeight() + 120) return null;
+        return new float[]{x, y};
+    }
+
+    private static List<SpellVisual> spells(Player player) {
+        List<SpellVisual> result = new ArrayList<>();
+        boolean localPlayer = player == Minecraft.getInstance().player;
+        Map<String, CooldownInstance> cooldowns = localPlayer
+                ? ClientMagicData.getCooldowns().getSpellCooldowns()
+                : MagicData.getPlayerMagicData(player).getPlayerCooldowns().getSpellCooldowns();
+        Map<String, Integer> synchronizedCooldowns = SpellDuelClientState.cooldowns(player.getUUID());
+        boolean hasSynchronizedCooldowns = SpellDuelClientState.hasCooldowns(player.getUUID());
+        List<ItemStack> stacks = getSpellbookStacks(player);
+        for (ItemStack stack : stacks) {
+            if (!ISpellContainer.isSpellContainer(stack)) continue;
+            for (SpellSlot slot : ISpellContainer.get(stack).getActiveSpells()) {
+                if (slot.getSpell() != null) {
+                    ResourceLocation spellId = slot.getSpell().getSpellResource();
+                    CooldownInstance cooldown = cooldowns.get(spellId.toString());
+                    int cooldownTicks = !localPlayer && hasSynchronizedCooldowns
+                            ? synchronizedCooldowns.getOrDefault(spellId.toString(), 0)
+                            : cooldown == null ? 0 : cooldown.getCooldownRemaining();
+                    result.add(new SpellVisual(spellId, slot.getLevel(), cooldownTicks));
+                }
+            }
+        }
+        return result;
+    }
+
+    private static List<ItemStack> getSpellbookStacks(Player player) {
+        List<ItemStack> result = new ArrayList<>();
+        CuriosApi.getCuriosInventory(player).ifPresent(handler ->
+                handler.findCurios("spellbook").forEach(slot -> result.add(slot.stack())));
+        return result;
+    }
+
+    private record SpellVisual(ResourceLocation id, int level, int cooldownTicks) {}
+}

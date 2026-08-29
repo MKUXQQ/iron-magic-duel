@@ -1,0 +1,12 @@
+.gradle/
+build/
+logs/
+runs/
+out/
+eclipse/
+idea/
+*.iml
+
+# Local troubleshooting captures and agent workspace state
+case-error-2026-07-15/
+.superpowers/

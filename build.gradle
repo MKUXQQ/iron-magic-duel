@@ -1,0 +1,99 @@
+plugins {
+    id 'java-library'
+    id 'idea'
+    id 'net.neoforged.gradle.userdev' version '7.0.182'
+}
+
+version = mod_version
+group = mod_group_id
+base { archivesName = mod_id }
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+minecraft {
+    accessTransformers.file('src/main/resources/META-INF/accesstransformer.cfg')
+}
+
+runs {
+    configureEach {
+        systemProperty 'forge.logging.console.level', 'debug'
+        modSource project.sourceSets.main
+    }
+    client { systemProperty 'forge.enabledGameTestNamespaces', project.mod_id }
+    server { programArgument '--nogui' }
+}
+
+repositories {
+    maven { url = 'https://www.cursemaven.com' }
+    maven { url = 'https://code.redspace.io/releases' }
+    maven { url = 'https://code.redspace.io/snapshots' }
+    mavenCentral()
+}
+
+dependencies {
+    implementation "net.neoforged:neoforge:${neo_version}"
+    implementation "curse.maven:irons-spells-n-spellbooks-855414:8364935"
+    implementation "curse.maven:curios-309927:${curios_file_id}"
+    testImplementation platform('org.junit:junit-bom:5.11.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+tasks.withType(Test).configureEach {
+    enabled = false
+    useJUnitPlatform()
+}
+
+tasks.register('resolverTest', JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.scrollspellicons.client.ScrollIconResolverSelfTest'
+}
+
+tasks.register('performanceSelfTest', JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.scrollspellicons.server.PerformanceSelfTest'
+}
+
+tasks.register('positionSmoothingSelfTest', JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.scrollspellicons.client.PositionSmootherSelfTest'
+}
+
+tasks.register('spellGravitySelfTest', JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.scrollspellicons.server.SpellGravityStateSelfTest'
+}
+
+tasks.register('freezeReleaseSafetySelfTest', JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.scrollspellicons.duel.FreezeReleaseSafetySelfTest'
+}
+
+tasks.register('challengeFlowSelfTest', JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.scrollspellicons.duel.DuelChallengeSelfTest'
+}
+
+tasks.register('surroundLockSelfTest', JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.scrollspellicons.duel.SurroundLockSelfTest'
+}
+
+tasks.named('check') { dependsOn 'resolverTest', 'performanceSelfTest', 'positionSmoothingSelfTest', 'spellGravitySelfTest', 'freezeReleaseSafetySelfTest', 'challengeFlowSelfTest', 'surroundLockSelfTest' }
+
+tasks.withType(ProcessResources).configureEach {
+    var props = [
+            minecraft_version: minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neo_version: neo_version,
+            neo_version_range: neo_version_range,
+            loader_version_range: loader_version_range,
+            mod_id: mod_id,
+            mod_name: mod_name,
+            mod_version: mod_version,
+            mod_license: mod_license,
+            mod_authors: mod_authors,
+            mod_description: mod_description
+    ]
+    inputs.properties props
+    filesMatching(['META-INF/neoforge.mods.toml']) { expand props }
+}
