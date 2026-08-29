@@ -1,0 +1,20 @@
+{
+  "key.categories.iron_magic_duel": "法术决斗",
+  "key.iron_magic_duel.show_scroll_spell_id": "查看手持法术卷轴 ID",
+  "key.iron_magic_duel.toggle_auto_sprint": "切换自动疾跑",
+  "key.iron_magic_duel.quick_cast_duplicate": "该按键已被快捷施法槽位%1$s使用",
+  "message.iron_magic_duel.auto_sprint_enabled": "自动疾跑：已开启",
+  "message.iron_magic_duel.auto_sprint_disabled": "自动疾跑：已关闭",
+  "item.iron_magic_duel.shop_editor": "商店编辑器",
+  "item.iron_magic_duel.duel_tab_icon": "法术决斗",
+  "item.iron_magic_duel.duel_player_selector": "玩家选择器",
+  "item.iron_magic_duel.duel_point_selector": "点位选择器",
+  "item.iron_magic_duel.no_cast_selector": "禁法区域工具",
+  "item.iron_magic_duel.player_interactor": "玩家交互器",
+  "spell.iron_magic_duel.crosswind_iron_slash": "暗铁追魂斩",
+  "spell.iron_magic_duel.phantom_halberd_ring": "雷罚换血",
+  "spell.iron_magic_duel.phantom_halberd_ring.guide": "锁定一名敌人进行10秒决斗，累计双方彼此造成的最终伤害；伤害较低的一方受到25点大型铁魔法雷击，平局不追加伤害。",
+  "spell.iron_magic_duel.astral_predator": "星陨猎杀",
+  "spell.iron_magic_duel.blazing_dragon_corridor": "烬龙天门·赤霄断空",
+  "itemGroup.iron_magic_duel.spell_duel": "法术决斗"
+}

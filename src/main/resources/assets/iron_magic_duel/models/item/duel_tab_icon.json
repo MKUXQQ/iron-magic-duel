@@ -1,0 +1,6 @@
+{
+  "parent": "item/generated",
+  "textures": {
+    "layer0": "iron_magic_duel:item/crosswind_iron_slash"
+  }
+}

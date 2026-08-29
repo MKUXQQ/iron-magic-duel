@@ -1,0 +1,64 @@
+{
+  "required": false,
+  "package": "com.example.scrollspellicons.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "TravelOpticsSandstormCompatMixin",
+    "TravelOpticsMagicFossilSummonCompatMixin",
+    "CooldownActionbarMixin",
+    "ResoundingPillarSpellMixin",
+    "FrozenTargetConeCollisionMixin",
+    "FrozenTargetConeCollisionInvoker",
+    "ContinuousConeLifetimeMixin",
+    "UninterruptibleChanneledCastMixin",
+    "UninterruptibleChanneledRecastMixin",
+    "HollowCrystalCastTimeMixin",
+    "UnconditionalSpellCastMixin",
+    "PortableInscriptionAutoWriteMixin",
+    "HeroicSpellCritDisableMixin",
+    "CriticalStrikeCritLogicMixin"
+    ,"RootSpellCompatMixin"
+    ,"ArcaneShackleSpellMixin"
+    ,"FireflySwarmAttackRateMixin"
+    ,"VoidRuneBulwarkSpellMixin"
+    ,"LearnedSpellDataWriteSnapshotMixin"
+    ,"SyncedSpellDataLearnedAccessorMixin"
+    ,"AlshanexAddItemsCodecDuplicateMixin"
+    ,"GlacialEdgeSpeedMixin"
+    ,"GlacialEdgeHitOnceMixin"
+    ,"RayOfFrostHitFreezeMixin"
+    ,"ContinuousConeCadenceMixin"
+    ,"SnowballFrostFieldMixin"
+    ,"ManagedFrostFieldMixin"
+    ,"ManagedFreezeSourceMixin"
+    ,"FlashbackReplayPayloadGuardMixin"
+    ,"FlashbackReplayAttachmentPacketGuardMixin"
+    ,"FlashbackReplayConfigPayloadGuardMixin"
+    ,"SwingcastStaffSpellSelectionGuardMixin"
+  ],
+  "client": [
+    "FlashbackFontResourceMixin",
+    "FlashbackReplayNeoForgePayloadGuardMixin",
+    "IronSpellSoundOcclusionMixin",
+    "CooldownMessageMixin",
+    "CooldownOverlayMixin",
+    "ManaBarOverlayMixin",
+    "SpellBarOverlayMixin",
+    "QuickCastKeyMappingMixin",
+    "PerceptionShakeDisableMixin",
+    "IronSpellbookCameraShakeDisableMixin",
+    "KnightlibCameraShakeDisableMixin",
+    "OctoLibCameraShakeDisableMixin",
+    "CataclysmScreenShakeDisableMixin",
+    "CataclysmCameraZoomDisableMixin",
+    "GtbcsScreenShakeDisableMixin",
+    "GtbcsFollowingScreenShakeDisableMixin",
+    "MowzieCameraShakeDisableMixin",
+    "HeroicCameraPayloadDisableMixin"
+    ,"CreateAllKeysThreadGuardMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  },
+  "minVersion": "0.8"
+}
